@@ -389,6 +389,63 @@ function weeksLeft(){
   const def=Math.max(100,tdee(kg)-P().kcal);
   return Math.round(left*7700/def/7);
 }
+/* ══ Accountability ═════════════════════════════════════════════════
+   No praise for doing what was agreed. Missing work is priced in days
+   added to the finish line, because that is what it actually costs. */
+function dayKcal(d){return (S.food[d]||[]).reduce((a,x)=>a+(+x.kcal||0),0);}
+function daySteps(d){return (S.habits[d]||{}).steps||0;}
+function weekStats(){
+  const wk=weekDays().map(x=>x.key), t=today();
+  const past=wk.filter(d=>d<=t);
+  const sessions=S.training.log.filter(x=>wk.includes(x.d)).length;
+  const logged=past.filter(d=>dayKcal(d)>0);
+  const over=logged.filter(d=>dayKcal(d)>P().kcal).length;
+  const stepDays=past.filter(d=>daySteps(d)>=STEP_GOAL).length;
+  const weighed=S.weights.some(w=>wk.includes(w.d));
+  return{wk:wk,past:past,sessions:sessions,over:over,logged:logged.length,
+         stepDays:stepDays,weighed:weighed,daysIn:past.length};
+}
+function stepStreakUnder(){
+  let n=0;
+  for(let i=1;i<=7;i++){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const k=d.toISOString().slice(0,10);
+    if(!S.habits[k])break;
+    if(daySteps(k)<STEP_GOAL)n++; else break;
+  }
+  return n;
+}
+/* What this week's slacking costs, in days added to the finish line. */
+function daysLost(){
+  const w=weekStats();
+  const missed=Math.max(0,(w.daysIn>=7?4:0)-w.sessions);
+  const stepShort=w.past.reduce((a,d)=>a+Math.max(0,STEP_GOAL-daySteps(d))*0.04,0);
+  const overKcal=w.past.reduce((a,d)=>a+Math.max(0,dayKcal(d)-P().kcal),0);
+  const deficit=Math.max(150,tdee(latestWeight())-P().kcal);
+  return Math.round((missed*350+stepShort+overKcal)/deficit);
+}
+/* The harshest line the data supports. Never about her — always about
+   the numbers and what they cost. */
+function verdict(){
+  const w=weekStats(), t=today(), d=new Date().getDay(), hour=new Date().getHours();
+  const todayKcal=dayKcal(t), lost=daysLost();
+  if(todayKcal>P().kcal)
+    return{t:(todayKcal-P().kcal)+' kcal over. Today moved you backwards. Tomorrow stops the bleeding, it does not undo it.',bad:1};
+  if(d===1&&!w.weighed&&hour>=9)
+    return{t:'Monday and no weigh-in. You do not get to skip the number because you already know what it says.',bad:1};
+  if(lost>=3)
+    return{t:'This week has cost you '+lost+' days. Not the plan. You.',bad:1};
+  if(w.daysIn>=5&&w.sessions<2)
+    return{t:w.sessions+' of 4 sessions with '+(7-w.daysIn)+' days left. That is not a programme, that is a hobby.',bad:1};
+  const under=stepStreakUnder();
+  if(under>=3)
+    return{t:under+' days under '+STEP_GOAL+' steps. That is burn you decided against.',bad:1};
+  if(hour>=20&&!w.logged)
+    return{t:'Nothing logged today. You are not tracking, you are guessing.',bad:1};
+  if(w.daysIn>=7&&w.sessions>=4&&w.stepDays>=5)
+    return{t:'Week done to standard. That is the baseline, not an achievement.',bad:0};
+  return null;
+}
 function pctDone(){
   const span=P().start-P().goal;
   if(span<=0)return 100;
@@ -566,6 +623,8 @@ function vHome(){
   const lastTr=S.training.log.slice(-1)[0];
   return `
   <h1>${greet()}</h1>
+  ${(()=>{const v=verdict();return v?`<div class="card" style="border-color:${v.bad?'var(--bad)':'var(--sage-dim)'}">
+     <div style="font-size:15px;line-height:1.4">${v.t}</div></div>`:'';})()}
   ${isMonday&&!weighedToday?`<div class="card warn between">
      <div><div class="lbl">Monday</div><div>On the scale. Before breakfast.</div></div>
      <button class="pri sm" data-tab="weight">Log</button></div>`:''}
@@ -596,7 +655,7 @@ function vHome(){
       <button class="sm" data-act="steps">Log</button>
     </div>
     ${ring(h.steps||0,STEP_GOAL)}
-    <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Target hit. That is what it looks like.'
+    <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Done. That was the minimum, not the win.'
       :'Steps move more of the deficit than any cardio session. They drop without you noticing when you eat less. Get out and walk.'}</div>
   </div>
   <div class="card">
@@ -607,11 +666,19 @@ function vHome(){
       <span class="dim">${lastTr?'Last: '+(lastTr.key==='cardio'?'':lastTr.key+' · ')+lastTr.name+' · '+lastTr.d:'No training logged yet'}</span>
       <button class="sm" data-tab="training">Train</button></div>
   </div>
-  <div class="card" style="margin-top:14px">
-    <div class="lbl">The deal</div>
-    <div class="note" style="margin-top:4px">Protein ${p.protein} g. ${STEP_GOAL} steps. Four sessions a week.
-      Weigh in Monday. Hit those four and the number on the scale takes care of itself.</div>
-  </div>
+  <h2>This week</h2>
+  ${(()=>{const w=weekStats(),lost=daysLost();return `
+  <div class="card">
+    <table>
+      <tr><td>Sessions</td><td class="${w.sessions>=4?'sage':'bad'}">${w.sessions} / 4</td></tr>
+      <tr><td>Days at ${STEP_GOAL} steps</td><td class="${w.stepDays>=w.daysIn-1?'sage':'bad'}">${w.stepDays} / ${w.daysIn}</td></tr>
+      <tr><td>Days over calories</td><td class="${w.over?'bad':'sage'}">${w.over}</td></tr>
+      <tr><td>Weigh-in</td><td class="${w.weighed?'sage':'bad'}">${w.weighed?'done':'missing'}</td></tr>
+    </table>
+    <div class="note" style="margin-top:10px">${lost>0
+      ? '<b class="bad">'+lost+' day'+(lost>1?'s':'')+' added to the finish line this week.</b> That is the price, converted.'
+      : 'Nothing lost this week. Keep it there.'}</div>
+  </div>`;})()}
   <button class="wide" data-tab="food" style="margin-top:4px">Log food</button>`;
 }
 function greet(){
