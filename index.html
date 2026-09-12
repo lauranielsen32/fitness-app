@@ -407,36 +407,57 @@ function nextDumbbell(w){
    per location — the place changes the tool, not the programme.
    Rep ranges are hypertrophy-ish (6–12) at 2 reps in reserve: in a
    deficit the job is keeping the muscle you have, not setting records. */
-const PLACES={home:{label:'Home',kit:'Dumbbells 2–24 kg, bike',step:2},
+const PLACES={home:{label:'Home',kit:'Dumbbells 2–24 kg',step:2},
               gym:{label:'Gym',kit:'Full gym',step:GYM_STEP},
               out:{label:'Out',kit:'Bodyweight and running',step:0}};
 
 const PROGRAM={
- A:{name:'Squat focus',blocks:[
-  {p:'Squat',      home:'Goblet squat',      gym:'Back squat',        out:'Split squat',        sets:4,lo:6, hi:10},
-  {p:'Push',       home:'Floor press',       gym:'Bench press',       out:'Push-up',            sets:3,lo:8, hi:12},
-  {p:'Row',        home:'One-arm row',       gym:'Seated cable row',  out:'Inverted row',       sets:3,lo:8, hi:12},
-  {p:'Hip hinge',  home:'Dumbbell RDL',      gym:'Romanian deadlift', out:'Single-leg RDL',     sets:3,lo:8, hi:12},
-  {p:'Core',       home:'Plank',             gym:'Plank',             out:'Plank',              sets:3,lo:30,hi:60,secs:1}]},
- B:{name:'Hinge focus',blocks:[
-  {p:'Hip hinge',  home:'Dumbbell RDL',      gym:'Deadlift',          out:'Single-leg RDL',     sets:4,lo:5, hi:8},
-  {p:'Vertical pull',home:'Dumbbell pullover',gym:'Lat pulldown',     out:'Inverted row',       sets:3,lo:8, hi:12},
-  {p:'Vertical push',home:'Shoulder press',  gym:'Overhead press',    out:'Pike push-up',       sets:3,lo:8, hi:12},
-  {p:'Lunge',      home:'Reverse lunge',     gym:'Walking lunge',     out:'Walking lunge',      sets:3,lo:8, hi:12},
-  {p:'Core',       home:'Side plank',        gym:'Side plank',        out:'Side plank',         sets:2,lo:30,hi:45,secs:1}]},
- C:{name:'Upper and glutes',blocks:[
-  {p:'Hip thrust', home:'Dumbbell hip thrust',gym:'Barbell hip thrust',out:'Glute bridge',      sets:4,lo:8, hi:12},
-  {p:'Push',       home:'Floor press',       gym:'Chest press',       out:'Push-up',            sets:3,lo:8, hi:12},
-  {p:'Row',        home:'Chest-supported row',gym:'Chest-supported row',out:'Inverted row',     sets:3,lo:8, hi:12},
-  {p:'Shoulders',  home:'Lateral raise',     gym:'Lateral raise',     out:'Pike push-up',       sets:3,lo:10,hi:15},
-  {p:'Arms',       home:'Biceps curl',       gym:'Biceps curl',       out:'Chin-up hold',       sets:2,lo:10,hi:15}]}
+ A:{name:'Glutes heavy + push',
+    why:'Loaded hip extension first while you are fresh, then a stretch-position glute, then upper-body push. Lateral raises are here on purpose: wider shoulders make the waist read smaller.',
+    warm:'5 min bike, 15 glute bridges, 20 band side-steps, 1 light set of the first exercise.',
+    blocks:[
+  {p:'Glute · load',   home:'Dumbbell hip thrust', gym:'Barbell hip thrust',  out:'Single-leg glute bridge', sets:4,lo:6, hi:10},
+  {p:'Glute · stretch',home:'Bulgarian split squat',gym:'Bulgarian split squat',out:'Split squat',           sets:3,lo:8, hi:12},
+  {p:'Push',           home:'Floor press',         gym:'Bench press',         out:'Push-up',                 sets:3,lo:8, hi:12},
+  {p:'Glute · abduct', home:'Side-lying abduction',gym:'Cable abduction',     out:'Band side-step',          sets:3,lo:15,hi:20},
+  {p:'Shoulders',      home:'Lateral raise',       gym:'Lateral raise',       out:'Pike push-up',            sets:3,lo:12,hi:15},
+  {p:'Core · anti-ext',home:'Dead bug',            gym:'Dead bug',            out:'Dead bug',                sets:3,lo:8, hi:12}]},
+ B:{name:'Hinge + pull',
+    why:'The RDL is the biggest glute-and-hamstring stretch you own, so it leads. Everything else is back work — a stronger back is the other half of the shoulder-to-waist ratio.',
+    warm:'5 min easy cardio, 10 hip hinges with no weight, 2 light sets of the RDL.',
+    blocks:[
+  {p:'Hinge',          home:'Dumbbell RDL',        gym:'Romanian deadlift',   out:'Single-leg RDL',          sets:4,lo:8, hi:12},
+  {p:'Vertical pull',  home:'Dumbbell pullover',   gym:'Lat pulldown',        out:'Inverted row',            sets:3,lo:8, hi:12},
+  {p:'Glute · lunge',  home:'Reverse lunge',       gym:'Walking lunge',       out:'Reverse lunge',           sets:3,lo:10,hi:12},
+  {p:'Row',            home:'One-arm row',         gym:'Chest-supported row', out:'Inverted row',            sets:3,lo:8, hi:12},
+  {p:'Rear delt',      home:'Rear delt raise',     gym:'Face pull',           out:'Band pull-apart',         sets:2,lo:12,hi:15},
+  {p:'Core · anti-rot',home:'Pallof press',        gym:'Pallof press',        out:'Side plank',              sets:3,lo:10,hi:12}]},
+ C:{name:'Glutes volume + arms',
+    why:'Higher reps and shorter rests on the glutes today, so the two heavy days stay heavy. Quads get one squat to hold what you have — volume goes to the glutes instead. Direct arm work so triceps are not left to chance.',
+    warm:'5 min bike, 20 band side-steps, 1 light set of the bridge.',
+    blocks:[
+  {p:'Glute · volume', home:'Hip thrust',          gym:'Barbell hip thrust',  out:'Glute bridge',            sets:4,lo:12,hi:15},
+  {p:'Squat',          home:'Goblet squat',        gym:'Back squat',          out:'Split squat',             sets:3,lo:6, hi:10},
+  {p:'Vertical push',  home:'Shoulder press',      gym:'Overhead press',      out:'Pike push-up',            sets:3,lo:8, hi:12},
+  {p:'Glute · abduct', home:'Band lateral walk',   gym:'Hip abduction machine',out:'Band lateral walk',      sets:3,lo:15,hi:20},
+  {p:'Triceps',        home:'Overhead extension',  gym:'Rope pushdown',       out:'Diamond push-up',         sets:2,lo:10,hi:15},
+  {p:'Biceps',         home:'Biceps curl',         gym:'Biceps curl',         out:'Chin-up hold',            sets:2,lo:10,hi:15}]}
 };
 const ORDER=['A','B','C'];
 const CARDIO={
- home:{n:'Bike intervals',plan:'10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down.'},
- gym: {n:'Bike intervals',plan:'10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down.'},
- out: {n:'Run',           plan:'Easy pace you can talk at, 30–40 min. Not a race.'}
+ home:{n:'Bike',plan:'Hard: 10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down. Easy: 30 min you could hold a conversation through.'},
+ gym: {n:'Bike',plan:'Hard: 10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down. Easy: 30 min you could hold a conversation through.'},
+ out: {n:'Run', plan:'Hard: 6 × 2 min quick with 2 min walk. Easy: 30–40 min at talking pace.'}
 };
+/* Tacking conditioning onto a lifting day is fine — after the weights,
+   never before. On the two glute-heavy days keep it easy so it does not
+   eat the recovery you just paid for. */
+function cardioAdvice(key){
+  return key==='B'||key==='A'
+    ? 'Keep it easy today — you just loaded the glutes and hamstrings.'
+    : 'Intervals are fine today, the legs took less of a beating.';
+}
+const STEP_GOAL=9000;
 
 function strengthLog(){return S.training.log.filter(x=>x.key&&ORDER.includes(x.key));}
 function nextKey(){
@@ -449,6 +470,19 @@ function daysSince(d){
   return Math.floor((new Date(today())-new Date(d))/864e5);
 }
 function lastTraining(){return S.training.log.slice(-1)[0];}
+function firstTraining(){const l=S.training.log;return l.length?l[0].d:null;}
+function weeksTraining(){
+  const f=firstTraining(); if(!f)return 0;
+  return Math.floor(daysSince(f)/7)+1;
+}
+/* Eight weeks in a deficit and the bar stops moving. That is the body,
+   not a character flaw — take a light week and come back. Due stays true
+   until it is actually taken, so a busy week cannot skip it. */
+function deloadDue(){
+  if(!firstTraining())return false;
+  const since=S.training.deload?daysSince(S.training.deload):daysSince(firstTraining());
+  return since>=56;
+}
 function thisWeekCount(){
   const wk=weekDays().map(d=>d.key);
   const l=S.training.log.filter(x=>wk.includes(x.d));
@@ -543,10 +577,21 @@ function vHome(){
   </div>
   <h2>Today</h2>
   <div class="card">
-    <div class="between" style="padding:2px 0 10px"><span>Sauna</span>
+    <div class="between">
+      <div><div class="lbl">Steps</div>
+        <div class="mid">${h.steps||0}<span class="dim" style="font-size:13px">/${STEP_GOAL}</span></div></div>
+      <button class="sm" data-act="steps">Log</button>
+    </div>
+    ${ring(h.steps||0,STEP_GOAL)}
+    <div class="note" style="margin-top:8px">Steps move more of the deficit than one cardio session does,
+      and they quietly drop when you eat less. Watch this number.</div>
+  </div>
+  <div class="card">
+    <div class="between" style="padding:2px 0 10px">
+      <div><span>Sauna</span><div class="st">After lifting or on a rest day — never before.</div></div>
       <button class="sm ${h.sauna?'pri':''}" data-act="habit" data-arg="sauna">${h.sauna?'Done':'Mark'}</button></div>
     <div class="between" style="border-top:1px solid var(--line);padding-top:11px">
-      <span class="dim">${lastTr?'Last session: '+lastTr.name+' · '+lastTr.d:'No training logged yet'}</span>
+      <span class="dim">${lastTr?'Last: '+(lastTr.key==='cardio'?'':lastTr.key+' · ')+lastTr.name+' · '+lastTr.d:'No training logged yet'}</span>
       <button class="sm" data-tab="training">Train</button></div>
   </div>
   <div class="grid2" style="margin-top:14px">
@@ -611,6 +656,12 @@ function vTraining(){
     </div>
     <div class="note">Pick where you are. The session stays the same — only the equipment changes.</div>
   </div>
+  ${deloadDue()?`<div class="card warn">
+    <div class="lbl">Week ${weeksTraining()}</div>
+    <div>Deload week</div>
+    <div class="note" style="margin-top:6px">Same sessions, two thirds of the weight, stop two reps short.
+      One week. It is part of the plan, not a setback.</div>
+    <button class="sm" style="margin-top:10px" data-act="deloaddone">Deload taken</button></div>`:''}
 
   <div class="card">
     <div class="between">
@@ -809,6 +860,23 @@ document.getElementById('sheet').addEventListener('click',function(e){
 async function act(name,arg,el){
   switch(name){
 
+  case 'deloaddone':
+    S.training.deload=today(); save(); render(); toast('Logged. Next one in eight weeks.'); break;
+
+  case 'steps':{
+    sheet(`<h2 style="margin-top:0">Steps today</h2>
+      <input id="st-n" type="number" inputmode="numeric" placeholder="${STEP_GOAL}">
+      <div class="grid2"><button data-act="closes">Cancel</button>
+      <button class="pri" data-act="savesteps">Save</button></div>
+      <div class="note" style="margin-top:10px">From your phone's health app. ${STEP_GOAL} is the target —
+      below 6000 for a week and the deficit gets harder than it needs to be.</div>`);
+    setTimeout(()=>document.getElementById('st-n').focus(),60); break;}
+
+  case 'savesteps':{
+    const d=today(); S.habits[d]=S.habits[d]||{};
+    S.habits[d].steps=num('st-n');
+    closeSheet(); save(); render(); break;}
+
   case 'habit':{
     const d=today(); S.habits[d]=S.habits[d]||{};
     S.habits[d][arg]=!S.habits[d][arg]; save(); render(); break;}
@@ -876,8 +944,10 @@ async function act(name,arg,el){
       S.training.last[n]={w:w||0,r:r,d:today()};
     });
     if(!ex.length){toast('Nothing to save — fill in reps and sets.',true);return;}
+    const min=num('s-cardio');
     S.training.log.push({id:Date.now(),d:today(),place:place,key:key,
-      name:PROGRAM[key].name,ex:ex});
+      name:PROGRAM[key].name,ex:ex,min:min||0});
+    if(min)S.habits[today()]=Object.assign(S.habits[today()]||{},{cardio:true});
     closeSheet(); save(); render(); break;}
 
   case 'cardio': cardioSheet(); break;
@@ -1047,7 +1117,10 @@ function sessionSheet(place){
   const pl=PLACES[place], key=nextKey(), sess=PROGRAM[key];
   sheet(`
   <div class="between"><h2 style="margin:0">${key} · ${sess.name}</h2><span class="st">${pl.label}</span></div>
-  <div class="note" style="margin:4px 0 10px">${pl.kit} · 2 reps in reserve on every set.</div>
+  <div class="note" style="margin:4px 0 8px">${sess.why}</div>
+  <div class="card" style="padding:10px;margin-bottom:4px">
+    <div class="lbl">Warm-up</div><div class="note">${sess.warm}</div></div>
+  <div class="note" style="margin:0 0 6px">${pl.kit} · 2 reps in reserve on every set.</div>
   ${sess.blocks.map(b=>{
     const n=b[place], last=S.training.last[n];
     const sug=suggestWeight(n,place,b.hi);
@@ -1065,15 +1138,26 @@ function sessionSheet(place){
         <input class="s" type="number" inputmode="numeric" style="margin:0" placeholder="sets" value="${b.sets}">
       </div>
       ${pl.step?(sug!=null
-        ? `<div class="st" style="margin-top:5px">${last&&last.r>=b.hi?'up a step — you hit '+b.hi+' last time':'same as last time'}${
-            place==='home'?', a setting your dumbbells can do':''}</div>`
+        ? `<div class="st" style="margin-top:5px">${
+            place==='home'&&sug>=DB_STEPS[DB_STEPS.length-1]&&last&&last.r>=b.hi
+              ? 'top of your dumbbells — add reps or slow the lowering instead'
+              : (last&&last.r>=b.hi?'up a step — you hit '+b.hi+' last time':'same as last time')+
+                (place==='home'?', a setting your dumbbells can do':'')}</div>`
         : '<div class="st" style="margin-top:5px">first time — put in your working weight</div>'):''}
     </div>`;}).join('')}
-  <div class="grid2" style="margin-top:16px">
+  <div class="card" style="margin-top:14px">
+    <div class="between"><div><div class="lbl">Finish with cardio</div>
+      <div class="note">${cardioAdvice(key)}</div></div>
+      <input id="s-cardio" type="number" inputmode="numeric" placeholder="min"
+        style="margin:0;width:82px;text-align:center">
+    </div>
+  </div>
+  <div class="grid2" style="margin-top:12px">
     <button data-act="closes">Cancel</button>
     <button class="pri" data-act="savesession" data-place="${place}" data-key="${key}">Save session</button>
   </div>
-  <div class="note" style="margin-top:10px">All sets at the top of the range and the weight goes up next time.</div>`);
+  <div class="note" style="margin-top:10px">All sets at the top of the range and the weight goes up next time.
+    ${deloadDue()?'<br><b>Week '+weeksTraining()+': take a deload.</b> Same exercises, two thirds of the weight, stop two reps short. One week, then back on.':''}</div>`);
 }
 
 function cardioSheet(){
