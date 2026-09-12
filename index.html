@@ -520,6 +520,29 @@ const LONG={
 function finishFor(key){const f=FINISH[key];return{n:f.n,min:f.min,how:f.how,why:f.why};}
 const STEP_GOAL=9000;
 
+/* Fixed days. The decision is made once, here — not every morning.
+   Mon weigh-in + A, Tue B, Thu C, Sat cardio. Mon/Tue back to back is
+   fine: A and B do not share a pattern. */
+const SCHEDULE={1:'A',2:'B',4:'C',6:'cardio'};
+const DAYNAME={1:'Mon',2:'Tue',4:'Thu',6:'Sat'};
+function dayOf(key){for(const d in SCHEDULE)if(SCHEDULE[d]===key)return DAYNAME[d];return '';}
+function doneThisWeek(key){
+  const wk=weekDays().map(d=>d.key);
+  return S.training.log.some(x=>x.key===key&&wk.includes(x.d));
+}
+/* Anything scheduled for a day that has already passed and was not done. */
+function owed(){
+  const t=new Date().getDay(), order=[1,2,4,6];
+  const idx=d=>d===0?7:d;                       // Sunday closes the week
+  return order.filter(d=>idx(d)<idx(t)&&!doneThisWeek(SCHEDULE[d])).map(d=>SCHEDULE[d]);
+}
+/* What the app tells her to do when she opens it. */
+function todaysJob(){
+  const d=new Date().getDay(), scheduled=SCHEDULE[d], debt=owed();
+  if(scheduled&&!doneThisWeek(scheduled))return{key:scheduled,why:'scheduled'};
+  if(debt.length)return{key:debt[0],why:'owed'};
+  return{key:null,why:scheduled?'done':'rest'};
+}
 function strengthLog(){return S.training.log.filter(x=>x.key&&ORDER.includes(x.key));}
 function nextKey(){
   const last=strengthLog().slice(-1)[0];
@@ -714,60 +737,50 @@ async function paintThumbs(){
 }
 
 function vTraining(){
-  const wk=thisWeekCount();
-  const strengthLeft=3-wk.strength, cardioLeft=1-wk.cardio;
-  /* One question only: what am I doing today. Strength first until the
-     three are in the bank, then cardio. */
-  const doCardio=strengthLeft<=0&&cardioLeft>0;
-  const key=nextKey(), sess=PROGRAM[key];
+  const job=todaysJob(), debt=owed();
+  const doCardio=job.key==='cardio';
+  const key=doCardio?null:job.key, sess=key?PROGRAM[key]:null;
   const last=lastTraining(), gap=last?daysSince(last.d):99;
-  const done=k=>S.training.log.some(x=>x.key===k&&weekDays().map(d=>d.key).includes(x.d));
-  const chip=(label,on,id)=>`<button data-act="preview" data-arg="${id}"
-    style="flex:1;padding:10px 2px;border-radius:9px;font-size:13px;
+  const chip=(label,id)=>{const on=doneThisWeek(id);return `<button data-act="preview" data-arg="${id}"
+    style="flex:1;padding:9px 2px;border-radius:9px;font-size:13px;line-height:1.3;
     background:${on?'var(--sage-dim)':'#0a0c0b'};color:${on?'var(--text)':'var(--dim)'};
-    border-color:${on?'var(--sage-dim)':'var(--line)'}">${on?'✓ ':''}${label}</button>`;
+    border-color:${on?'var(--sage-dim)':'var(--line)'}">${on?'✓ ':''}${label}<br>
+    <span style="font-size:10px;opacity:.7">${dayOf(id)}</span></button>`;};
   const log=S.training.log.slice().reverse().slice(0,6);
   return `
   <h1>Training</h1>
 
   <div class="card">
-    <div class="lbl" style="margin-bottom:9px">Your week · 4 sessions</div>
+    <div class="lbl" style="margin-bottom:9px">Your week</div>
     <div class="row" style="gap:6px">
-      ${chip('A',done('A'),'A')}${chip('B',done('B'),'B')}${chip('C',done('C'),'C')}${chip('Cardio',done('cardio'),'cardio')}
+      ${chip('A','A')}${chip('B','B')}${chip('C','C')}${chip('Cardio','cardio')}
     </div>
-    <div class="note" style="margin-top:7px">Tap any of them to see the session.</div>
-    <div class="note">${(()=>{
-      if(strengthLeft<=0&&cardioLeft<=0)return 'All four done. Nothing left to negotiate.';
-      if(strengthLeft<=0)return 'Only cardio left this week.';
-      if(cardioLeft<=0)return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' left this week.';
-      return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' and cardio left this week.';
-    })()}</div>
+    <div class="note" style="margin-top:8px">Tap any of them to see the session.</div>
   </div>
 
-  ${strengthLeft<=0&&cardioLeft<=0?`
-  <div class="card"><div class="lbl">Today</div>
-    <div class="mid" style="margin:4px 0">Rest</div>
-    <div class="note">The week is done. Walk, eat your protein, sleep. That is the work now.</div>
-  </div>`:doCardio?`
+  ${job.key?`
   <div class="card">
-    <div class="between"><div class="lbl">Today</div><span class="tag">${LONG.home.min} min</span></div>
-    <div class="mid" style="margin:4px 0 2px">Cardio</div>
-    <div class="note" style="margin-bottom:12px">Bike or run at talking pace. The three lifting days are in the bank.</div>
-    <div class="seg">${Object.entries(PLACES).map(([k,v])=>
-      `<button data-act="cardioplace2" data-arg="${k}">${v.label}</button>`).join('')}</div>
-    <div id="cardioBody"></div>
+    <div class="between">
+      <div class="lbl">${job.why==='owed'?'You owe this from '+dayOf(job.key):'Today'}</div>
+      ${doCardio?`<span class="tag">${LONG.home.min} min</span>`:''}</div>
+    <div class="mid" style="margin:4px 0 2px">${doCardio?'Cardio':key+' · '+sess.name}</div>
+    <div class="st">${doCardio?'Bike or run at talking pace.':sess.sum+' · '+sess.blocks.length+' exercises'}</div>
+    ${job.why==='owed'?'<div class="st" style="margin-top:8px;color:var(--bad)">You skipped it. It does not disappear — do it today.</div>':''}
+    ${gap===0?'<div class="st" style="margin-top:8px;color:var(--bad)">You already trained today. Muscle is built while you recover. Go home.</div>'
+     :gap===1&&!doCardio?'<div class="st" style="margin-top:8px">Trained yesterday. This one hits different muscles — back-to-back days are fine.</div>':''}
+    <div class="lbl" style="margin:14px 0 7px">Where are you</div>
+    <div class="seg" style="margin:0">${Object.entries(PLACES).map(([k,v])=>
+      `<button data-act="${doCardio?'cardioplace2':'place'}" data-arg="${k}" data-key="${key||''}">${v.label}</button>`).join('')}</div>
+    ${doCardio?'<div id="cardioBody"></div>':''}
   </div>`:`
   <div class="card">
     <div class="lbl">Today</div>
-    <div class="mid" style="margin:4px 0 2px">${key} · ${sess.name}</div>
-    <div class="st">${sess.sum} · ${sess.blocks.length} exercises</div>
-    ${gap===0?'<div class="st" style="margin-top:9px;color:var(--bad)">You already trained today. Muscle is built while you recover. Go home.</div>'
-     :gap===1?'<div class="st" style="margin-top:9px">Trained yesterday. This one hits different muscles — back-to-back days are fine.</div>':''}
-    <div class="lbl" style="margin:14px 0 7px">Where are you</div>
-    <div class="seg" style="margin:0">${Object.entries(PLACES).map(([k,v])=>
-      `<button data-act="place" data-arg="${k}">${v.label}</button>`).join('')}</div>
-  </div>
-`}
+    <div class="mid" style="margin:4px 0">${job.why==='done'?'Done':'Rest day'}</div>
+    <div class="note">${job.why==='done'
+      ? 'Today\'s session is in the bank. Nothing more to do.'
+      : debt.length?'Nothing scheduled, and nothing owed. Walk, eat your protein, sleep.'
+        :'Nothing scheduled. Walk, eat your protein, sleep. That is the work today.'}</div>
+  </div>`}
 
   ${deloadDue()?`<div class="card warn">
     <div class="lbl">Week ${weeksTraining()}</div>
@@ -786,7 +799,7 @@ function vTraining(){
             x.key==='cardio'?'':' · '+x.ex.reduce((a,e)=>a+e.sets.length,0)+' sets'}</div>
         </div>
         ${x.min?`<span class="tag">${x.min} min</span>`:''}
-      </div>`).join(''):'<div class="note">Nothing yet. Pick where you are and start.</div>'}
+      </div>`).join(''):'<div class="note">Nothing yet. Monday is A. Start there.</div>'}
   </div>`;
 }
 
