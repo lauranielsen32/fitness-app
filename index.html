@@ -503,7 +503,7 @@ const ORDER=['A','B','C'];
 /* Conditioning is prescribed, not optional. Intervals live on day C,
    because that is the day the legs took the least load — putting them
    after heavy hip thrusts or RDLs eats the recovery you just paid for.
-   A and B finish easy. The fourth day is the long easy session. */
+   A and B finish easy. The fourth session of the week is cardio. */
 const FINISH={
  A:{n:'Easy bike',    min:15,how:'Zone 2. You can talk the whole way. RPE 4 out of 10.',
     why:'Flushes the legs. Anything harder competes with the glute work you just did.'},
@@ -514,8 +514,8 @@ const FINISH={
 };
 
 const LONG={
- home:{n:'Long easy bike or run',min:35,how:'Steady, talking pace, one podcast long. RPE 4–5.'},
- gym: {n:'Long easy bike',       min:35,how:'Steady zone 2, one podcast long. RPE 4–5.'}
+ home:{n:'Cardio · bike or run',min:35,how:'Steady, talking pace, one podcast long. RPE 4–5.'},
+ gym: {n:'Cardio · bike',       min:35,how:'Steady zone 2, one podcast long. RPE 4–5.'}
 };
 function finishFor(key){const f=FINISH[key];return{n:f.n,min:f.min,how:f.how,why:f.why};}
 const STEP_GOAL=9000;
@@ -717,7 +717,7 @@ function vTraining(){
   const wk=thisWeekCount();
   const strengthLeft=3-wk.strength, cardioLeft=1-wk.cardio;
   /* One question only: what am I doing today. Strength first until the
-     three are in the bank, then the easy session. */
+     three are in the bank, then cardio. */
   const doCardio=strengthLeft<=0&&cardioLeft>0;
   const key=nextKey(), sess=PROGRAM[key];
   const last=lastTraining(), gap=last?daysSince(last.d):99;
@@ -738,9 +738,9 @@ function vTraining(){
     <div class="note" style="margin-top:7px">Tap any of them to see the session.</div>
     <div class="note">${(()=>{
       if(strengthLeft<=0&&cardioLeft<=0)return 'All four done. Nothing left to negotiate.';
-      if(strengthLeft<=0)return 'Only the easy session left this week.';
+      if(strengthLeft<=0)return 'Only cardio left this week.';
       if(cardioLeft<=0)return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' left this week.';
-      return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' and the easy session left this week.';
+      return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' and cardio left this week.';
     })()}</div>
   </div>
 
@@ -751,8 +751,8 @@ function vTraining(){
   </div>`:doCardio?`
   <div class="card">
     <div class="between"><div class="lbl">Today</div><span class="tag">${LONG.home.min} min</span></div>
-    <div class="mid" style="margin:4px 0 2px">Easy session</div>
-    <div class="note" style="margin-bottom:12px">Bike or run, talking pace. The three lifting days are in the bank.</div>
+    <div class="mid" style="margin:4px 0 2px">Cardio</div>
+    <div class="note" style="margin-bottom:12px">Bike or run at talking pace. The three lifting days are in the bank.</div>
     <div class="seg">${Object.entries(PLACES).map(([k,v])=>
       `<button data-act="cardioplace2" data-arg="${k}">${v.label}</button>`).join('')}</div>
     <div id="cardioBody"></div>
@@ -1273,7 +1273,7 @@ function sessionSheet(place,key){
 
 function cardioSheet(){
   sheet(`
-  <h2 style="margin-top:0">Conditioning</h2>
+  <h2 style="margin-top:0">Cardio</h2>
   <div class="note" style="margin-bottom:10px">Where are you?</div>
   <div class="seg">
     ${Object.entries(PLACES).map(([k,v])=>
