@@ -293,49 +293,65 @@ function status(){
 }
 
 /* ══ 7. AI — Gemini free tier, called straight from the browser ═════ */
-let modelCache=null;
+let modelList=null;
 function aiKey(){return localStorage.getItem(AI_KEY)||'';}
-async function aiModel(){
-  if(modelCache)return modelCache;
-  const saved=localStorage.getItem(AIMODEL_KEY);
-  if(saved){modelCache=saved;return saved;}
+
+/* Ordered candidates, newest first. Models get retired without notice,
+   so we keep a list and fall through on 404 / 503. */
+async function aiModels(){
+  if(modelList)return modelList;
+  try{const saved=JSON.parse(localStorage.getItem(AIMODEL_KEY)||'null');
+    if(Array.isArray(saved)&&saved.length){modelList=saved;return saved;}}catch(e){}
   const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models',
     {headers:{'x-goog-api-key':aiKey()}});
   if(!r.ok)throw new Error('AI key rejected ('+r.status+')');
   const j=await r.json();
-  const ok=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')
-    &&!/image|tts|live|embedding|audio/i.test(m.name));
-  const names=ok.map(m=>m.name.replace('models/',''));
-  const flash=names.filter(n=>/flash/.test(n)&&!/lite|preview|omni/.test(n));
-  const best=flash.includes('gemini-flash-latest')?'gemini-flash-latest'
-    :flash.filter(n=>/^gemini-[\d.]+-flash$/.test(n))
-          .sort((a,b)=>parseFloat(b.split('-')[1])-parseFloat(a.split('-')[1]))[0]
-    ||flash[0]||names[0];
-  const pick=best?{name:best}:null;
-  if(!pick)throw new Error('No usable model found on this key.');
-  modelCache=pick.name.replace('models/','');
-  localStorage.setItem(AIMODEL_KEY,modelCache);
-  return modelCache;
+  const names=(j.models||[])
+    .filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
+    .map(m=>m.name.replace('models/',''))
+    .filter(n=>/flash/.test(n)&&!/image|tts|live|embedding|audio|omni|preview/.test(n));
+  const ver=n=>{const m=n.match(/gemini-([\d.]+)-flash/);return m?parseFloat(m[1]):0;};
+  const full=names.filter(n=>!/lite|latest/.test(n)).sort((a,b)=>ver(b)-ver(a));
+  const lite=names.filter(n=>/lite/.test(n)&&!/latest/.test(n)).sort((a,b)=>ver(b)-ver(a));
+  modelList=full.concat(names.filter(n=>/latest/.test(n)),lite).slice(0,6);
+  if(!modelList.length)throw new Error('No usable model on this key.');
+  localStorage.setItem(AIMODEL_KEY,JSON.stringify(modelList));
+  return modelList;
 }
+function aiModelName(){return (modelList&&modelList[0])||'—';}
+
 async function aiFood(b64){
   if(!aiKey())throw new Error('No AI key — add one in Settings.');
-  const m=await aiModel();
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent',
-    {method:'POST',headers:{'content-type':'application/json','x-goog-api-key':aiKey()},
-     body:JSON.stringify({
-       contents:[{parts:[
-         {text:'Estimate the nutrition of the meal in this photo for the portion shown. '+
-               'Reply with JSON only: {"name":string,"kcal":number,"protein":number,"carbs":number,"fat":number}. '+
-               'Grams for protein/carbs/fat. Be realistic, not optimistic.'},
-         {inline_data:{mime_type:'image/jpeg',data:b64}}]}],
-       generationConfig:{responseMimeType:'application/json',temperature:0.2}})});
-  if(!r.ok){let t='';try{t=(await r.json()).error?.message||'';}catch(e){}
-    throw new Error('AI error '+r.status+(t?': '+t:''));}
-  const j=await r.json();
-  const txt=j.candidates?.[0]?.content?.parts?.[0]?.text||'';
-  const o=JSON.parse(txt);
-  return{name:String(o.name||'Meal'),kcal:Math.round(+o.kcal||0),
-    p:Math.round(+o.protein||0),c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
+  const models=await aiModels();
+  const body=JSON.stringify({
+    contents:[{parts:[
+      {text:'Estimate the nutrition of the meal in this photo for the portion shown. '+
+            'Reply with JSON only: {"name":string,"kcal":number,"protein":number,"carbs":number,"fat":number}. '+
+            'Grams for protein/carbs/fat. Be realistic, not optimistic.'},
+      {inline_data:{mime_type:'image/jpeg',data:b64}}]}],
+    generationConfig:{responseMimeType:'application/json',temperature:0.2}});
+  let last='';
+  for(let i=0;i<models.length;i++){
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[i]+':generateContent',
+      {method:'POST',headers:{'content-type':'application/json','x-goog-api-key':aiKey()},body:body});
+    if(r.ok){
+      const j=await r.json();
+      const txt=j.candidates?.[0]?.content?.parts?.[0]?.text||'';
+      let o; try{o=JSON.parse(txt);}catch(e){last='model returned no usable JSON';continue;}
+      if(i>0){ // this one works — move it to the front for next time
+        modelList=[models[i]].concat(models.filter((m,k)=>k!==i));
+        localStorage.setItem(AIMODEL_KEY,JSON.stringify(modelList));
+      }
+      return{name:String(o.name||'Meal'),kcal:Math.round(+o.kcal||0),
+        p:Math.round(+o.protein||0),c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
+    }
+    let msg=''; try{msg=(await r.json()).error?.message||'';}catch(e){}
+    last=r.status+(msg?': '+msg.slice(0,90):'');
+    if(r.status===400||r.status===401||r.status===403)
+      throw new Error('AI error '+last);   // key or image problem — trying another model won't help
+    // 404 gone, 429 rate limited, 503 busy -> try the next model
+  }
+  throw new Error('All models failed — '+last);
 }
 /* photo -> downscaled jpeg base64 */
 function shrink(file,max,q){
@@ -697,7 +713,7 @@ function vSettings(){
     <div class="note" style="margin-top:10px">
       Free at aistudio.google.com/apikey. Stored on this device only.
       On the free tier Google may use your photos to train their models.
-      ${localStorage.getItem(AIMODEL_KEY)?'<br>Model: '+localStorage.getItem(AIMODEL_KEY):''}
+      ${modelList?'<br>Model: '+aiModelName():''}
     </div>
   </div>
 
@@ -740,10 +756,10 @@ async function act(name,arg,el){
       try{
         const big=await shrink(f,900,.72), small=await shrink(f,400,.6);
         sheet('<div class="note">Asking the AI…</div>');
-        let g={name:'Meal',kcal:0,p:0,c:0,f:0};
+        let g={name:'Meal',kcal:0,p:0,c:0,f:0},err='';
         try{g=await aiFood(strip(big));}
-        catch(e){toast(e.message,true);}
-        foodSheet(Object.assign(g,{photoData:small}));
+        catch(e){err=e.message;toast(e.message,true);}
+        foodSheet(Object.assign(g,{photoData:small,err:err}));
       }catch(e){closeSheet();toast('Photo failed: '+e.message,true);}
     };
     inp.click(); break;}
@@ -893,13 +909,13 @@ async function act(name,arg,el){
   case 'saveai':{
     const k=val('ai-key').trim(); if(!k)return;
     localStorage.setItem(AI_KEY,k);
-    localStorage.removeItem(AIMODEL_KEY); modelCache=null;
-    try{await aiModel(); toast('AI key works — model '+modelCache);}
+    localStorage.removeItem(AIMODEL_KEY); modelList=null;
+    try{await aiModels(); toast('AI key works — '+aiModelName());}
     catch(e){toast(e.message,true);}
     render(); break;}
   case 'clearai':
     localStorage.removeItem(AI_KEY); localStorage.removeItem(AIMODEL_KEY);
-    modelCache=null; render(); toast('AI key removed.'); break;
+    modelList=null; render(); toast('AI key removed.'); break;
 
   case 'export':{
     const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
@@ -934,6 +950,9 @@ function foodSheet(x){
   sheet(`
   <h2 style="margin-top:0">${x.id?'Edit':'Add'} food</h2>
   ${x.photoData?`<img src="${x.photoData}" style="width:100%;border-radius:12px;margin-bottom:12px">`:''}
+  ${x.err?`<div class="card" style="border-color:var(--bad);margin-bottom:12px">
+     <div class="lbl bad">AI failed</div><div class="note">${esc(x.err)}</div>
+     <div class="note" style="margin-top:6px">Type the numbers yourself, or try again.</div></div>`:''}
   <label class="lbl">Name</label><input id="f-name" value="${esc(x.name)}">
   <div class="grid2">
     <div><label class="lbl">Kcal</label><input id="f-kcal" type="number" inputmode="numeric" value="${x.kcal}"></div>
