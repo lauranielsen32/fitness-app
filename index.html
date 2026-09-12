@@ -567,16 +567,17 @@ function vHome(){
   return `
   <h1>${greet()}</h1>
   ${isMonday&&!weighedToday?`<div class="card warn between">
-     <div><div class="lbl">Monday</div><div>Weigh-in before breakfast</div></div>
+     <div><div class="lbl">Monday</div><div>On the scale. Before breakfast.</div></div>
      <button class="pri sm" data-tab="weight">Log</button></div>`:''}
   <div class="card">
     <div class="lbl">Calories left today</div>
     <div class="big ${left<0?'bad':'sage'}">${left}</div>
-    <div class="st">${e.kcal} of ${p.kcal} kcal</div>
+    <div class="st">${left<0?Math.abs(left)+' over. Walk it off tonight.'
+      :e.kcal+' of '+p.kcal+' kcal'}</div>
     ${ring(e.kcal,p.kcal)}
   </div>
   <div class="grid3">
-    <div class="card"><div class="lbl">Protein</div><div class="mid">${e.p}<span class="dim" style="font-size:13px">/${p.protein}</span></div>${ring(e.p,p.protein)}</div>
+    <div class="card"><div class="lbl">Protein</div><div class="mid ${e.p>=p.protein?'sage':''}">${e.p}<span class="dim" style="font-size:13px">/${p.protein}</span></div>${ring(e.p,p.protein)}</div>
     <div class="card"><div class="lbl">Carbs</div><div class="mid">${e.c}</div></div>
     <div class="card"><div class="lbl">Fat</div><div class="mid">${e.f}</div></div>
   </div>
@@ -585,7 +586,7 @@ function vHome(){
     <div class="lbl">Of your goal</div>
     <div class="big sage">${pctDone()}<span class="dim" style="font-size:19px">%</span></div>
     ${ring(pctDone(),100)}
-    <div class="st" style="margin-top:9px">${100-pctDone()}% to go · about ${weeksLeft()} weeks at this pace</div>
+    <div class="st" style="margin-top:9px">${100-pctDone()}% left · ${weeksLeft()} weeks at this pace. Earn it.</div>
   </div>
   <h2>Today</h2>
   <div class="card">
@@ -595,24 +596,29 @@ function vHome(){
       <button class="sm" data-act="steps">Log</button>
     </div>
     ${ring(h.steps||0,STEP_GOAL)}
-    <div class="note" style="margin-top:8px">Steps move more of the deficit than one cardio session does,
-      and they quietly drop when you eat less. Watch this number.</div>
+    <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Target hit. That is what it looks like.'
+      :'Steps move more of the deficit than any cardio session. They drop without you noticing when you eat less. Get out and walk.'}</div>
   </div>
   <div class="card">
     <div class="between" style="padding:2px 0 10px">
-      <div><span>Sauna</span><div class="st">After lifting or on a rest day — never before.</div></div>
+      <div><span>Sauna</span><div class="st">After the weights or on a rest day. Never before.</div></div>
       <button class="sm ${h.sauna?'pri':''}" data-act="habit" data-arg="sauna">${h.sauna?'Done':'Mark'}</button></div>
     <div class="between" style="border-top:1px solid var(--line);padding-top:11px">
       <span class="dim">${lastTr?'Last: '+(lastTr.key==='cardio'?'':lastTr.key+' · ')+lastTr.name+' · '+lastTr.d:'No training logged yet'}</span>
       <button class="sm" data-tab="training">Train</button></div>
   </div>
-  <div class="grid2" style="margin-top:14px">
-    <button data-tab="food">Log food</button>
-    <button data-tab="settings">Settings</button>
-  </div>`;
+  <div class="card" style="margin-top:14px">
+    <div class="lbl">The deal</div>
+    <div class="note" style="margin-top:4px">Protein ${p.protein} g. ${STEP_GOAL} steps. Four sessions a week.
+      Weigh in Monday. Hit those four and the number on the scale takes care of itself.</div>
+  </div>
+  <button class="wide" data-tab="food" style="margin-top:4px">Log food</button>`;
 }
-function greet(){const h=new Date().getHours();
-  return h<10?'Good morning':h<17?'Today':'Good evening';}
+function greet(){
+  const p=P(), kg=latestWeight();
+  if(kg<=p.goal)return 'You did it';
+  const h=new Date().getHours();
+  return h<10?'Morning. Get after it':h<17?'Today':'Finish the day clean';}
 function fmt(n){return (Math.round(n*10)/10).toString().replace('.0','');}
 
 function vFood(){
@@ -637,7 +643,7 @@ function vFood(){
           <div class="st">${x.kcal} kcal · ${x.p}P ${x.c}C ${x.f}F</div>
         </div>
         <button class="ghost sm" data-act="edit" data-arg="${x.id}">Edit</button>
-      </div>`).join(''):'<div class="note">Nothing logged yet.</div>'}
+      </div>`).join(''):'<div class="note">Nothing logged. If it went in your mouth, it goes in here.</div>'}
   </div>
   ${!aiKey()?'<div class="note" style="margin-top:10px">Add a free Gemini key in Settings to use photo logging.</div>':''}`;
 }
@@ -660,19 +666,19 @@ function vTraining(){
       <span class="tag">${wk.strength}/3 strength · ${wk.cardio}/1 cardio this week</span></div>
     <div class="mid" style="margin:4px 0 2px">${key} · ${sess.name}</div>
     <div class="st">${sess.blocks.map(b=>b.p).join(' · ')}</div>
-    ${gap===0?'<div class="st" style="margin-top:9px;color:var(--bad)">You trained today. Rest beats another session.</div>'
-     :gap===1?'<div class="st" style="margin-top:9px">Trained yesterday — this one hits other patterns, so it is fine.</div>':''}
+    ${gap===0?'<div class="st" style="margin-top:9px;color:var(--bad)">You already trained today. Muscle is built while you recover, not while you grind. Go home.</div>'
+     :gap===1?'<div class="st" style="margin-top:9px">Trained yesterday. Different patterns today. No reason to sit this one out.</div>':''}
     <div class="seg" style="margin-top:12px">
       ${Object.entries(PLACES).map(([k,v])=>
         `<button data-act="place" data-arg="${k}">${v.label}</button>`).join('')}
     </div>
-    <div class="note">Pick where you are. The session stays the same — only the equipment changes.</div>
+    <div class="note">Where are you. The session does not change — only the equipment does.</div>
   </div>
   ${deloadDue()?`<div class="card warn">
     <div class="lbl">Week ${weeksTraining()}</div>
     <div>Deload week</div>
     <div class="note" style="margin-top:6px">Same sessions, two thirds of the weight, stop two reps short.
-      One week. It is part of the plan, not a setback.</div>
+      One week. Take it. Skipping it is how you stall for a month instead.</div>
     <button class="sm" style="margin-top:10px" data-act="deloaddone">Deload taken</button></div>`:''}
 
   <div class="card">
@@ -681,8 +687,8 @@ function vTraining(){
       <span class="tag">${wk.cardio?'done this week':LONG.home.min+' min'}</span></div>
     <div>${wk.cardio?'Done — the rest of the week is steps and recovery':'Long easy session'}</div>
     <div class="note" style="margin-top:4px">${wk.cardio
-      ? 'Two hard conditioning sessions in a week you eat 1800 kcal in is one too many.'
-      : 'Steady and easy, on a day you have not lifted. The intervals already sit on day C.'}</div>
+      ? 'Done. A second hard session on 1800 kcal costs you more than it gives.'
+      : 'On a day you have not lifted. Not negotiable — it is the fourth day of four.'}</div>
     ${wk.cardio?'':'<button class="sm" style="margin-top:10px" data-act="cardio">Start it</button>'}
   </div>
 
@@ -693,8 +699,8 @@ function vTraining(){
       return `<div class="between" style="padding:8px 0;border-bottom:1px solid var(--line)">
         <span class="${k===key?'sage':''}">${k} · ${PROGRAM[k].name}</span>
         <span class="st">${done?done.d:'not done yet'}</span></div>`;}).join('')}
-    <div class="note" style="margin-top:10px">Three full-body sessions in rotation, so nothing gets dropped
-      if a day goes. 48 hours between sessions that share a pattern.</div>
+    <div class="note" style="margin-top:10px">Three sessions, in this order, every week. Miss one and you do not
+      skip it — you move it. 48 hours between sessions that share a pattern.</div>
   </div>
 
   <h2>History</h2>
@@ -771,7 +777,7 @@ function vWeight(){
   <div class="card">
     ${w.length?'<table>'+w.slice().reverse().map(x=>
       `<tr><td>${fmt(x.kg)} kg</td><td>${x.d}${x.d===nextMonday()?' · Monday':''}</td></tr>`).join('')+'</table>'
-      :'<div class="note">Nothing logged yet. Weigh in Monday morning, before breakfast.</div>'}
+      :'<div class="note">Nothing logged. Monday morning, before breakfast. Start.</div>'}
   </div>`;
 }
 function nextMonday(){return '';}
@@ -980,7 +986,7 @@ async function act(name,arg,el){
       <input id="w-d" type="date" value="${today()}">
       <div class="grid2"><button data-act="closes">Cancel</button>
       <button class="pri" data-act="saveweigh">Save</button></div>
-      <div class="note" style="margin-top:10px">Monday morning, before breakfast, same scale.</div>`);
+      <div class="note" style="margin-top:10px">Monday morning. Before breakfast. Same scale. Every week.</div>`);
     setTimeout(()=>document.getElementById('w-kg').focus(),60); break;}
 
   case 'saveweigh':{
@@ -1120,7 +1126,7 @@ function foodSheet(x){
     <div><label class="lbl">Carbs g</label><input id="f-c" type="number" inputmode="numeric" value="${x.c}"></div>
     <div><label class="lbl">Fat g</label><input id="f-f" type="number" inputmode="numeric" value="${x.f}"></div>
   </div>
-  <div class="note" style="margin:4px 0 12px">The AI guesses. Correct it — your numbers win.</div>
+  <div class="note" style="margin:4px 0 12px">The AI guesses low on oil and sauce. Correct it upward, not downward.</div>
   <div class="grid2">
     ${x.id?`<button data-act="delfood" data-arg="${x.id}">Delete</button>`:'<button data-act="closes">Cancel</button>'}
     <button class="pri" data-act="savefood" data-id="${x.id||''}"
@@ -1133,9 +1139,10 @@ function sessionSheet(place){
   sheet(`
   <div class="between"><h2 style="margin:0">${key} · ${sess.name}</h2><span class="st">${pl.label}</span></div>
   <div class="note" style="margin:4px 0 8px">${sess.why}</div>
+  <div class="note" style="color:var(--sage);margin-bottom:8px">Every set. Every rep. Then the finisher.</div>
   <div class="card" style="padding:10px;margin-bottom:4px">
     <div class="lbl">Warm-up</div><div class="note">${sess.warm}</div></div>
-  <div class="note" style="margin:0 0 6px">${pl.kit} · 2 reps in reserve on every set.</div>
+  <div class="note" style="margin:0 0 6px">${pl.kit} · Two reps left in the tank. Not five.</div>
   ${sess.blocks.map(b=>{
     const n=b[place], last=S.training.last[n];
     const sug=suggestWeight(n,place,b.hi);
@@ -1170,14 +1177,14 @@ function sessionSheet(place){
     <div class="row" style="margin-top:10px">
       <input id="s-cardio" type="number" inputmode="numeric" value="${f.min}"
         style="margin:0;width:90px;text-align:center">
-      <span class="st">minutes — change it if you cut it short, 0 if you skipped</span>
+      <span class="st">minutes. The session is not finished until this is.</span>
     </div>
   </div>`;})()}
   <div class="grid2" style="margin-top:12px">
     <button data-act="closes">Cancel</button>
     <button class="pri" data-act="savesession" data-place="${place}" data-key="${key}">Save session</button>
   </div>
-  <div class="note" style="margin-top:10px">All sets at the top of the range and the weight goes up next time.
+  <div class="note" style="margin-top:10px">Hit the top of every range and the weight goes up next time. That is the whole game.
     ${deloadDue()?'<br><b>Week '+weeksTraining()+': take a deload.</b> Same exercises, two thirds of the weight, stop two reps short. One week, then back on.':''}</div>`);
 }
 
@@ -1198,8 +1205,8 @@ function cardioPlace(place){
       <div class="between" style="margin-bottom:2px">
         <b style="font-weight:500;color:var(--text)">${c.n}</b><span class="tag">${c.min} min</span></div>
       <div class="note" style="margin-bottom:5px">${c.how}</div>
-      <div class="note" style="margin-bottom:14px;color:var(--sage)">This one is for the heart and
-        for the daily deficit, not for the legs. If it leaves you sore, it was too hard.</div>
+      <div class="note" style="margin-bottom:14px;color:var(--sage)">This is for the heart and the deficit,
+        not for the legs. If it leaves you sore you went too hard and stole from tomorrow.</div>
       <label class="lbl">Minutes done</label>
       <input id="c-min" type="number" inputmode="numeric" value="${c.min}">
       <div class="grid2"><button data-act="closes">Cancel</button>
