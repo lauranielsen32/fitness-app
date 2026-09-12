@@ -465,40 +465,39 @@ function nextDumbbell(w){
    Rep ranges are hypertrophy-ish (6–12) at 2 reps in reserve: in a
    deficit the job is keeping the muscle you have, not setting records. */
 const PLACES={home:{label:'Home',kit:'Dumbbells 2–24 kg',step:2},
-              gym:{label:'Gym',kit:'Full gym',step:GYM_STEP},
-              out:{label:'Out',kit:'Bodyweight and running',step:0}};
+              gym:{label:'Gym',kit:'Full gym',step:GYM_STEP}};
 
 const PROGRAM={
  A:{name:'Glutes heavy + push',sum:'Glutes · Chest · Shoulders · Core',
     why:'Loaded hip extension first while you are fresh, then a stretch-position glute, then upper-body push. Lateral raises are here on purpose: wider shoulders make the waist read smaller.',
     warm:'5 min bike, 15 glute bridges, 20 band side-steps, 1 light set of the first exercise.',
     blocks:[
-  {p:'Glute · load',   home:'Dumbbell hip thrust', gym:'Barbell hip thrust',  out:'Single-leg glute bridge', sets:4,lo:6, hi:10},
-  {p:'Glute · stretch',home:'Bulgarian split squat',gym:'Bulgarian split squat',out:'Split squat',           sets:3,lo:8, hi:12},
-  {p:'Push',           home:'Floor press',         gym:'Bench press',         out:'Push-up',                 sets:3,lo:8, hi:12},
-  {p:'Glute · abduct', home:'Side-lying abduction',gym:'Cable abduction',     out:'Band side-step',          sets:3,lo:15,hi:20},
-  {p:'Shoulders',      home:'Lateral raise',       gym:'Lateral raise',       out:'Pike push-up',            sets:3,lo:12,hi:15},
-  {p:'Core · anti-ext',home:'Dead bug',            gym:'Dead bug',            out:'Dead bug',                sets:3,lo:8, hi:12}]},
+  {p:'Glute · load',   home:'Dumbbell hip thrust', gym:'Barbell hip thrust',  sets:4,lo:6, hi:10},
+  {p:'Glute · stretch',home:'Bulgarian split squat',gym:'Bulgarian split squat',sets:3,lo:8, hi:12},
+  {p:'Push',           home:'Floor press',         gym:'Bench press',         sets:3,lo:8, hi:12},
+  {p:'Glute · abduct', home:'Side-lying abduction',gym:'Cable abduction',     sets:3,lo:15,hi:20},
+  {p:'Shoulders',      home:'Lateral raise',       gym:'Lateral raise',       sets:3,lo:12,hi:15},
+  {p:'Core · anti-ext',home:'Dead bug',            gym:'Dead bug',            sets:3,lo:8, hi:12}]},
  B:{name:'Hinge + pull',sum:'Hamstrings · Glutes · Back · Core',
     why:'The RDL is the biggest glute-and-hamstring stretch you own, so it leads. Everything else is back work — a stronger back is the other half of the shoulder-to-waist ratio.',
     warm:'5 min easy cardio, 10 hip hinges with no weight, 2 light sets of the RDL.',
     blocks:[
-  {p:'Hinge',          home:'Dumbbell RDL',        gym:'Romanian deadlift',   out:'Single-leg RDL',          sets:4,lo:8, hi:12},
-  {p:'Vertical pull',  home:'Dumbbell pullover',   gym:'Lat pulldown',        out:'Inverted row',            sets:3,lo:8, hi:12},
-  {p:'Glute · lunge',  home:'Reverse lunge',       gym:'Walking lunge',       out:'Reverse lunge',           sets:3,lo:10,hi:12},
-  {p:'Row',            home:'One-arm row',         gym:'Chest-supported row', out:'Inverted row',            sets:3,lo:8, hi:12},
-  {p:'Rear delt',      home:'Rear delt raise',     gym:'Face pull',           out:'Band pull-apart',         sets:2,lo:12,hi:15},
-  {p:'Core · anti-rot',home:'Pallof press',        gym:'Pallof press',        out:'Side plank',              sets:3,lo:10,hi:12}]},
+  {p:'Hinge',          home:'Dumbbell RDL',        gym:'Romanian deadlift',   sets:4,lo:8, hi:12},
+  {p:'Vertical pull',  home:'Dumbbell pullover',   gym:'Lat pulldown',        sets:3,lo:8, hi:12},
+  {p:'Glute · lunge',  home:'Reverse lunge',       gym:'Walking lunge',       sets:3,lo:10,hi:12},
+  {p:'Row',            home:'One-arm row',         gym:'Chest-supported row', sets:3,lo:8, hi:12},
+  {p:'Rear delt',      home:'Rear delt raise',     gym:'Face pull',           sets:2,lo:12,hi:15},
+  {p:'Core · anti-rot',home:'Pallof press',        gym:'Pallof press',        sets:3,lo:10,hi:12}]},
  C:{name:'Glutes volume + arms',sum:'Glutes · Quads · Shoulders · Arms',
     why:'Higher reps and shorter rests on the glutes today, so the two heavy days stay heavy. Quads get one squat to hold what you have — volume goes to the glutes instead. Direct arm work so triceps are not left to chance.',
     warm:'5 min bike, 20 band side-steps, 1 light set of the bridge.',
     blocks:[
-  {p:'Glute · volume', home:'Hip thrust',          gym:'Barbell hip thrust',  out:'Glute bridge',            sets:4,lo:12,hi:15},
-  {p:'Squat',          home:'Goblet squat',        gym:'Back squat',          out:'Split squat',             sets:3,lo:6, hi:10},
-  {p:'Vertical push',  home:'Shoulder press',      gym:'Overhead press',      out:'Pike push-up',            sets:3,lo:8, hi:12},
-  {p:'Glute · abduct', home:'Band lateral walk',   gym:'Hip abduction machine',out:'Band lateral walk',      sets:3,lo:15,hi:20},
-  {p:'Triceps',        home:'Overhead extension',  gym:'Rope pushdown',       out:'Diamond push-up',         sets:2,lo:10,hi:15},
-  {p:'Biceps',         home:'Biceps curl',         gym:'Biceps curl',         out:'Chin-up hold',            sets:2,lo:10,hi:15}]}
+  {p:'Glute · volume', home:'Hip thrust',          gym:'Barbell hip thrust',  sets:4,lo:12,hi:15},
+  {p:'Squat',          home:'Goblet squat',        gym:'Back squat',          sets:3,lo:6, hi:10},
+  {p:'Vertical push',  home:'Shoulder press',      gym:'Overhead press',      sets:3,lo:8, hi:12},
+  {p:'Glute · abduct', home:'Band lateral walk',   gym:'Hip abduction machine',sets:3,lo:15,hi:20},
+  {p:'Triceps',        home:'Overhead extension',  gym:'Rope pushdown',       sets:2,lo:10,hi:15},
+  {p:'Biceps',         home:'Biceps curl',         gym:'Biceps curl',         sets:2,lo:10,hi:15}]}
 };
 const ORDER=['A','B','C'];
 /* Conditioning is prescribed, not optional. Intervals live on day C,
@@ -513,19 +512,12 @@ const FINISH={
  C:{n:'Bike intervals',min:20,how:'5 min easy, then 8 × (1 min hard / 2 min easy), 3 min down. Hard means you cannot talk.',
     why:'Legs took the least beating today. This is where the hard work belongs.'}
 };
-const FINISH_OUT={
- A:{n:'Easy walk',how:'Brisk but conversational, 15 min. RPE 4 out of 10.'},
- B:{n:'Easy walk',how:'Brisk but conversational, 15 min. RPE 4 out of 10.'},
- C:{n:'Run intervals',how:'5 min jog, then 6 × (1 min quick / 2 min walk), 3 min walk down.'}};
+
 const LONG={
- home:{n:'Long easy bike',min:35,how:'Steady zone 2, one podcast long. RPE 4–5.'},
- gym: {n:'Long easy bike',min:35,how:'Steady zone 2, one podcast long. RPE 4–5.'},
- out: {n:'Easy run',      min:35,how:'Talking pace the whole way. If you cannot talk, slow down.'}
+ home:{n:'Long easy bike or run',min:35,how:'Steady, talking pace, one podcast long. RPE 4–5.'},
+ gym: {n:'Long easy bike',       min:35,how:'Steady zone 2, one podcast long. RPE 4–5.'}
 };
-function finishFor(key,place){
-  const f=FINISH[key], o=FINISH_OUT[key];
-  return place==='out'?{n:o.n,min:f.min,how:o.how,why:f.why}:{n:f.n,min:f.min,how:f.how,why:f.why};
-}
+function finishFor(key){const f=FINISH[key];return{n:f.n,min:f.min,how:f.how,why:f.why};}
 const STEP_GOAL=9000;
 
 function strengthLog(){return S.training.log.filter(x=>x.key&&ORDER.includes(x.key));}
@@ -730,9 +722,10 @@ function vTraining(){
   const key=nextKey(), sess=PROGRAM[key];
   const last=lastTraining(), gap=last?daysSince(last.d):99;
   const done=k=>S.training.log.some(x=>x.key===k&&weekDays().map(d=>d.key).includes(x.d));
-  const chip=(label,on)=>`<div style="flex:1;text-align:center;padding:9px 2px;border-radius:9px;
-    background:${on?'var(--sage-dim)':'#0a0c0b'};color:${on?'var(--text)':'var(--dim)'};font-size:13px">
-    ${on?'✓ ':''}${label}</div>`;
+  const chip=(label,on,id)=>`<button data-act="preview" data-arg="${id}"
+    style="flex:1;padding:10px 2px;border-radius:9px;font-size:13px;
+    background:${on?'var(--sage-dim)':'#0a0c0b'};color:${on?'var(--text)':'var(--dim)'};
+    border-color:${on?'var(--sage-dim)':'var(--line)'}">${on?'✓ ':''}${label}</button>`;
   const log=S.training.log.slice().reverse().slice(0,6);
   return `
   <h1>Training</h1>
@@ -740,9 +733,10 @@ function vTraining(){
   <div class="card">
     <div class="lbl" style="margin-bottom:9px">Your week · 4 sessions</div>
     <div class="row" style="gap:6px">
-      ${chip('A',done('A'))}${chip('B',done('B'))}${chip('C',done('C'))}${chip('Cardio',done('cardio'))}
+      ${chip('A',done('A'),'A')}${chip('B',done('B'),'B')}${chip('C',done('C'),'C')}${chip('Cardio',done('cardio'),'cardio')}
     </div>
-    <div class="note" style="margin-top:9px">${(()=>{
+    <div class="note" style="margin-top:7px">Tap any of them to see the session.</div>
+    <div class="note">${(()=>{
       if(strengthLeft<=0&&cardioLeft<=0)return 'All four done. Nothing left to negotiate.';
       if(strengthLeft<=0)return 'Only the easy session left this week.';
       if(cardioLeft<=0)return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' left this week.';
@@ -773,8 +767,7 @@ function vTraining(){
     <div class="seg" style="margin:0">${Object.entries(PLACES).map(([k,v])=>
       `<button data-act="place" data-arg="${k}">${v.label}</button>`).join('')}</div>
   </div>
-  ${cardioLeft>0?`<button class="wide ghost sm" data-act="cardio" style="margin-bottom:10px">
-     Not lifting today — do the easy session instead</button>`:''}`}
+`}
 
   ${deloadDue()?`<div class="card warn">
     <div class="lbl">Week ${weeksTraining()}</div>
@@ -1029,7 +1022,11 @@ async function act(name,arg,el){
     S.food[d]=(S.food[d]||[]).filter(y=>String(y.id)!==String(arg));
     closeSheet(); save(); render(); break;}
 
-  case 'place': sessionSheet(arg); break;
+  case 'place': sessionSheet(arg,el.dataset.key||null); break;
+  case 'switchplace':{const [pp,kk]=arg.split('|'); sessionSheet(pp,kk); break;}
+  case 'preview':{
+    if(arg==='cardio')return cardioSheet();
+    sessionSheet('home',arg); break;}
 
   case 'savesession':{
     const place=el.dataset.place, key=el.dataset.key;
@@ -1215,10 +1212,15 @@ function foodSheet(x){
   </div>`);
 }
 
-function sessionSheet(place){
-  const pl=PLACES[place], key=nextKey(), sess=PROGRAM[key];
+function sessionSheet(place,key){
+  key=key||nextKey();
+  const pl=PLACES[place], sess=PROGRAM[key];
   sheet(`
-  <div class="between"><h2 style="margin:0">${key} · ${sess.name}</h2><span class="st">${pl.label}</span></div>
+  <div class="between"><h2 style="margin:0">${key} · ${sess.name}</h2></div>
+  <div class="seg" style="margin:10px 0 8px">
+    ${Object.entries(PLACES).map(([k,v])=>
+      `<button class="${k===place?'on':''}" data-act="switchplace" data-arg="${k}|${key}">${v.label}</button>`).join('')}
+  </div>
   <div class="note" style="margin:4px 0 8px">${sess.why}</div>
   <div class="note" style="color:var(--sage);margin-bottom:8px">Every set. Every rep. Then the finisher.</div>
   <div class="card" style="padding:10px;margin-bottom:4px">
@@ -1248,7 +1250,7 @@ function sessionSheet(place){
                 (place==='home'?', a setting your dumbbells can do':'')}</div>`
         : '<div class="st" style="margin-top:5px">first time — put in your working weight</div>'):''}
     </div>`;}).join('')}
-  ${(()=>{const f=finishFor(key,place);return `
+  ${(()=>{const f=finishFor(key);return `
   <div class="card" style="margin-top:14px">
     <div class="between" style="margin-bottom:2px">
       <div class="lbl">Finish with</div><span class="tag">${f.min} min</span></div>
