@@ -220,6 +220,34 @@ async function getPhoto(id){
   }catch(e){return null;}
 }
 
+/* Steps arrive from the phone, not from typing. A Shortcut drops a file
+   in the repo named steps/<date>-<count>.json — the count is in the file
+   name, so one directory listing is the whole read. Highest wins, since
+   a step count only climbs during a day. Typing it by hand still works
+   and still wins if it is higher. */
+async function pullSteps(){
+  if(!linked())return false;
+  const t=today();
+  try{
+    const r=await fetch(ghUrl('steps')+'?ref='+encodeURIComponent(cfg.branch)+'&t='+Date.now(),
+      {cache:'no-store',headers:ghHead()});
+    if(!r.ok)return false;                       // 404 until the first file lands
+    const list=await r.json();
+    if(!Array.isArray(list))return false;
+    let best=0;
+    list.forEach(f=>{
+      const m=String(f.name).match(/^(\d{4}-\d{2}-\d{2})-(\d+)\.json$/);
+      if(m&&m[1]===t)best=Math.max(best,parseInt(m[2],10));
+    });
+    if(!best)return false;
+    S.habits[t]=S.habits[t]||{};
+    if((S.habits[t].steps||0)>=best)return false;
+    S.habits[t].steps=best;
+    localStorage.setItem(DATA_KEY,JSON.stringify(S));
+    return true;
+  }catch(e){return false;}
+}
+
 /* ══ 5. Save / sync ═════════════════════════════════════════════════ */
 let timer=null,dirty=false,busy=false,lastErr='';
 
@@ -259,6 +287,7 @@ async function pullIfNewer(quiet){
     }else if(!quiet){
       toast(rem.exists?'Already up to date.':'No data.json in the repo yet.');
     }
+    if(await pullSteps())render();
     lastErr='';
   }catch(e){lastErr=e.message;if(!quiet)toast('Could not load: '+e.message,true);}
   finally{busy=false;status();}
@@ -682,7 +711,7 @@ function vHome(){
     <div class="between">
       <div><div class="lbl">Steps</div>
         <div class="mid">${h.steps||0}<span class="dim" style="font-size:13px">/${STEP_GOAL}</span></div></div>
-      <button class="sm" data-act="steps">Log</button>
+      <button class="sm" data-act="steps">${h.steps?'Edit':'Log'}</button>
     </div>
     ${ring(h.steps||0,STEP_GOAL)}
     <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Done. That was the minimum, not the win.'
@@ -1456,7 +1485,7 @@ async function link(){
   try{const raw=localStorage.getItem(DATA_KEY); if(raw)S=merge(JSON.parse(raw));}catch(e){}
   readCfg();
   render();
-  if(cfg)pullIfNewer(true);
+  if(cfg){pullIfNewer(true);pullSteps().then(ok=>{if(ok)render();});}
 })();
 </script>
 </body>
