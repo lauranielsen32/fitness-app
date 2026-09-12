@@ -400,30 +400,66 @@ function nextDumbbell(w){
   return i<0?DB_STEPS[DB_STEPS.length-1]:DB_STEPS[i];
 }
 
-/* ══ 9. Exercise library ════════════════════════════════════════════ */
-const PLACES={
-  home:{label:'Home',kit:'Dumbbells 2–24 kg, bike',step:2,
-    ex:['Goblet squat','Dumbbell RDL','Floor press','One-arm row','Shoulder press',
-        'Lateral raise','Biceps curl','Bike intervals']},
-  gym:{label:'Gym',kit:'Full gym',step:GYM_STEP,
-    ex:['Squat','Romanian deadlift','Leg press','Lat pulldown','Chest press',
-        'Cable row','Shoulder press','Leg curl']},
-  out:{label:'Out',kit:'Bodyweight and running',step:0,
-    ex:['Run','Push-up','Walking lunge','Plank','Step-up']}
+/* ══ 9. Programme ═══════════════════════════════════════════════════
+   Three full-body sessions in fixed rotation A → B → C, plus one
+   conditioning day. Full body so a missed day never drops a muscle
+   group for a week. Each block is a movement pattern with one variant
+   per location — the place changes the tool, not the programme.
+   Rep ranges are hypertrophy-ish (6–12) at 2 reps in reserve: in a
+   deficit the job is keeping the muscle you have, not setting records. */
+const PLACES={home:{label:'Home',kit:'Dumbbells 2–24 kg, bike',step:2},
+              gym:{label:'Gym',kit:'Full gym',step:GYM_STEP},
+              out:{label:'Out',kit:'Bodyweight and running',step:0}};
+
+const PROGRAM={
+ A:{name:'Squat focus',blocks:[
+  {p:'Squat',      home:'Goblet squat',      gym:'Back squat',        out:'Split squat',        sets:4,lo:6, hi:10},
+  {p:'Push',       home:'Floor press',       gym:'Bench press',       out:'Push-up',            sets:3,lo:8, hi:12},
+  {p:'Row',        home:'One-arm row',       gym:'Seated cable row',  out:'Inverted row',       sets:3,lo:8, hi:12},
+  {p:'Hip hinge',  home:'Dumbbell RDL',      gym:'Romanian deadlift', out:'Single-leg RDL',     sets:3,lo:8, hi:12},
+  {p:'Core',       home:'Plank',             gym:'Plank',             out:'Plank',              sets:3,lo:30,hi:60,secs:1}]},
+ B:{name:'Hinge focus',blocks:[
+  {p:'Hip hinge',  home:'Dumbbell RDL',      gym:'Deadlift',          out:'Single-leg RDL',     sets:4,lo:5, hi:8},
+  {p:'Vertical pull',home:'Dumbbell pullover',gym:'Lat pulldown',     out:'Inverted row',       sets:3,lo:8, hi:12},
+  {p:'Vertical push',home:'Shoulder press',  gym:'Overhead press',    out:'Pike push-up',       sets:3,lo:8, hi:12},
+  {p:'Lunge',      home:'Reverse lunge',     gym:'Walking lunge',     out:'Walking lunge',      sets:3,lo:8, hi:12},
+  {p:'Core',       home:'Side plank',        gym:'Side plank',        out:'Side plank',         sets:2,lo:30,hi:45,secs:1}]},
+ C:{name:'Upper and glutes',blocks:[
+  {p:'Hip thrust', home:'Dumbbell hip thrust',gym:'Barbell hip thrust',out:'Glute bridge',      sets:4,lo:8, hi:12},
+  {p:'Push',       home:'Floor press',       gym:'Chest press',       out:'Push-up',            sets:3,lo:8, hi:12},
+  {p:'Row',        home:'Chest-supported row',gym:'Chest-supported row',out:'Inverted row',     sets:3,lo:8, hi:12},
+  {p:'Shoulders',  home:'Lateral raise',     gym:'Lateral raise',     out:'Pike push-up',       sets:3,lo:10,hi:15},
+  {p:'Arms',       home:'Biceps curl',       gym:'Biceps curl',       out:'Chin-up hold',       sets:2,lo:10,hi:15}]}
 };
-const SUGGEST={
-  home:['Goblet squat','Dumbbell RDL','Floor press','One-arm row','Shoulder press'],
-  gym:['Squat','Lat pulldown','Chest press','Romanian deadlift','Cable row'],
-  out:['Run','Walking lunge','Push-up','Plank']
+const ORDER=['A','B','C'];
+const CARDIO={
+ home:{n:'Bike intervals',plan:'10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down.'},
+ gym: {n:'Bike intervals',plan:'10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down.'},
+ out: {n:'Run',           plan:'Easy pace you can talk at, 30–40 min. Not a race.'}
 };
-function suggestWeight(name,place){
-  const last=S.training.last[name];
-  const step=PLACES[place].step;
-  if(!step)return null;
-  if(!last)return step*(place==='home'?3:10);
-  const up=last.r>=12;
-  const w=up?(place==='home'?nextDumbbell(last.w+0.1):last.w+step):last.w;
-  return place==='home'?nextDumbbell(w):snap(w,step);
+
+function strengthLog(){return S.training.log.filter(x=>x.key&&ORDER.includes(x.key));}
+function nextKey(){
+  const last=strengthLog().slice(-1)[0];
+  if(!last)return 'A';
+  return ORDER[(ORDER.indexOf(last.key)+1)%3];
+}
+function daysSince(d){
+  if(!d)return 99;
+  return Math.floor((new Date(today())-new Date(d))/864e5);
+}
+function lastTraining(){return S.training.log.slice(-1)[0];}
+function thisWeekCount(){
+  const wk=weekDays().map(d=>d.key);
+  const l=S.training.log.filter(x=>wk.includes(x.d));
+  return {strength:l.filter(x=>ORDER.includes(x.key)).length, cardio:l.filter(x=>x.key==='cardio').length};
+}
+/* Double progression: all sets at the top of the range → up one step. */
+function suggestWeight(name,place,hi){
+  const last=S.training.last[name], step=PLACES[place].step;
+  if(!step||!last||!last.w)return null;
+  if(last.r>=hi)return place==='home'?nextDumbbell(last.w+0.1):snap(last.w+step,step);
+  return place==='home'?nextDumbbell(last.w):snap(last.w,step);
 }
 
 /* ══ 10. Shopping sections ══════════════════════════════════════════ */
@@ -556,26 +592,55 @@ async function paintThumbs(){
 }
 
 function vTraining(){
+  const key=nextKey(), sess=PROGRAM[key];
+  const last=lastTraining(), gap=last?daysSince(last.d):99;
+  const wk=thisWeekCount();
   const log=S.training.log.slice().reverse().slice(0,8);
   return `
   <h1>Training</h1>
   <div class="card">
-    <div class="lbl">Where are you?</div>
-    <div class="seg" style="margin-top:10px">
+    <div class="between"><div class="lbl">Next up</div>
+      <span class="tag">${wk.strength}/3 strength · ${wk.cardio}/1 cardio this week</span></div>
+    <div class="mid" style="margin:4px 0 2px">${key} · ${sess.name}</div>
+    <div class="st">${sess.blocks.map(b=>b.p).join(' · ')}</div>
+    ${gap===0?'<div class="st" style="margin-top:9px;color:var(--bad)">You trained today. Rest beats another session.</div>'
+     :gap===1?'<div class="st" style="margin-top:9px">Trained yesterday — this one hits other patterns, so it is fine.</div>':''}
+    <div class="seg" style="margin-top:12px">
       ${Object.entries(PLACES).map(([k,v])=>
         `<button data-act="place" data-arg="${k}">${v.label}</button>`).join('')}
     </div>
-    <div class="note">Pick a place and you get a session for the kit you have.</div>
+    <div class="note">Pick where you are. The session stays the same — only the equipment changes.</div>
   </div>
+
+  <div class="card">
+    <div class="between">
+      <div><div class="lbl">Conditioning</div>
+        <div style="margin-top:2px">${wk.cardio?'Done this week':'One session left this week'}</div></div>
+      <button class="sm" data-act="cardio">Log</button>
+    </div>
+  </div>
+
+  <h2>Rotation</h2>
+  <div class="card">
+    ${ORDER.map(k=>{
+      const done=strengthLog().filter(x=>x.key===k).slice(-1)[0];
+      return `<div class="between" style="padding:8px 0;border-bottom:1px solid var(--line)">
+        <span class="${k===key?'sage':''}">${k} · ${PROGRAM[k].name}</span>
+        <span class="st">${done?done.d:'not done yet'}</span></div>`;}).join('')}
+    <div class="note" style="margin-top:10px">Three full-body sessions in rotation, so nothing gets dropped
+      if a day goes. 48 hours between sessions that share a pattern.</div>
+  </div>
+
   <h2>History</h2>
   <div class="card">
-    ${log.length?log.map(s=>`
+    ${log.length?log.map(x=>`
       <div class="item">
         <div style="flex:1">
-          <div>${esc(s.name)}</div>
-          <div class="st">${s.d} · ${s.ex.length} exercises · ${PLACES[s.place]?PLACES[s.place].label:s.place}</div>
+          <div>${x.key==='cardio'?esc(x.name):x.key+' · '+esc(x.name)}</div>
+          <div class="st">${x.d} · ${PLACES[x.place]?PLACES[x.place].label:x.place}${
+            x.key==='cardio'?'':' · '+x.ex.reduce((a,e)=>a+e.sets.length,0)+' sets'}</div>
         </div>
-        <span class="tag">${s.ex.reduce((a,x)=>a+x.sets.length,0)} sets</span>
+        ${x.key==='cardio'?`<span class="tag">${x.min} min</span>`:''}
       </div>`).join(''):'<div class="note">No sessions yet.</div>'}
   </div>`;
 }
@@ -798,21 +863,30 @@ async function act(name,arg,el){
   case 'place': sessionSheet(arg); break;
 
   case 'savesession':{
-    const place=el.dataset.place;
+    const place=el.dataset.place, key=el.dataset.key;
     const ex=[];
     document.querySelectorAll('[data-ex]').forEach(row=>{
       const n=row.dataset.ex;
       const w=parseFloat(row.querySelector('.w').value);
       const r=parseInt(row.querySelector('.r').value,10);
-      const s=parseInt(row.querySelector('.s').value,10);
-      if(!r||!s)return;
-      const sets=[]; for(let i=0;i<s;i++)sets.push({w:w||0,r:r});
+      const st=parseInt(row.querySelector('.s').value,10);
+      if(!r||!st)return;
+      const sets=[]; for(let i=0;i<st;i++)sets.push({w:w||0,r:r});
       ex.push({n:n,sets:sets});
       S.training.last[n]={w:w||0,r:r,d:today()};
     });
     if(!ex.length){toast('Nothing to save — fill in reps and sets.',true);return;}
-    S.training.log.push({id:Date.now(),d:today(),place:place,
-      name:PLACES[place].label+' session',ex:ex});
+    S.training.log.push({id:Date.now(),d:today(),place:place,key:key,
+      name:PROGRAM[key].name,ex:ex});
+    closeSheet(); save(); render(); break;}
+
+  case 'cardio': cardioSheet(); break;
+  case 'cardioplace': cardioPlace(arg); break;
+  case 'savecardio':{
+    const place=el.dataset.place, min=num('c-min');
+    if(!min){toast('How many minutes?',true);return;}
+    S.training.log.push({id:Date.now(),d:today(),place:place,key:'cardio',
+      name:CARDIO[place].n,min:min,ex:[]});
     closeSheet(); save(); render(); break;}
 
   case 'weigh':{
@@ -970,34 +1044,58 @@ function foodSheet(x){
 }
 
 function sessionSheet(place){
-  const p=PLACES[place];
-  const list=SUGGEST[place];
+  const pl=PLACES[place], key=nextKey(), sess=PROGRAM[key];
   sheet(`
-  <h2 style="margin-top:0">${p.label}</h2>
-  <div class="note" style="margin-bottom:14px">${p.kit}</div>
-  ${list.map(n=>{
-    const last=S.training.last[n];
-    const sug=suggestWeight(n,place);
-    return `<div data-ex="${esc(n)}" style="border-top:1px solid var(--line);padding:11px 0">
-      <div class="between" style="margin-bottom:7px">
-        <b style="font-weight:500">${esc(n)}</b>
-        <span class="st">${last?'last '+(last.w?fmt(last.w)+' kg × ':'')+last.r:'first time'}</span>
+  <div class="between"><h2 style="margin:0">${key} · ${sess.name}</h2><span class="st">${pl.label}</span></div>
+  <div class="note" style="margin:4px 0 10px">${pl.kit} · 2 reps in reserve on every set.</div>
+  ${sess.blocks.map(b=>{
+    const n=b[place], last=S.training.last[n];
+    const sug=suggestWeight(n,place,b.hi);
+    const unit=b.secs?'sec':'reps';
+    return `<div data-ex="${esc(n)}" data-hi="${b.hi}" style="border-top:1px solid var(--line);padding:11px 0">
+      <div class="between" style="margin-bottom:3px">
+        <b style="font-weight:500">${esc(n)}</b><span class="lbl">${b.p}</span>
       </div>
+      <div class="st" style="margin-bottom:8px">${b.sets} × ${b.lo}–${b.hi} ${unit}
+        · ${last?'last '+(last.w?fmt(last.w)+' kg × '+last.r:last.r+' '+unit)+', '+daysSince(last.d)+'d ago':'first time'}</div>
       <div class="row">
-        ${p.step?`<input class="w" type="number" step="${p.step}" inputmode="decimal"
-           style="margin:0" value="${sug!=null?sug:''}" placeholder="kg">`
-         :'<input class="w hide" value="0">'}
-        <input class="r" type="number" inputmode="numeric" style="margin:0" placeholder="reps">
-        <input class="s" type="number" inputmode="numeric" style="margin:0" placeholder="sets">
+        ${pl.step?`<input class="w" type="number" step="${pl.step}" inputmode="decimal" style="margin:0"
+           value="${sug!=null?sug:''}" placeholder="kg">`:'<input class="w hide" value="0">'}
+        <input class="r" type="number" inputmode="numeric" style="margin:0" placeholder="${unit}">
+        <input class="s" type="number" inputmode="numeric" style="margin:0" placeholder="sets" value="${b.sets}">
       </div>
-      ${p.step&&sug!=null?`<div class="st" style="margin-top:5px">suggested ${fmt(sug)} kg${
-        place==='home'?' — a setting your dumbbells can do':''}</div>`:''}
+      ${pl.step?(sug!=null
+        ? `<div class="st" style="margin-top:5px">${last&&last.r>=b.hi?'up a step — you hit '+b.hi+' last time':'same as last time'}${
+            place==='home'?', a setting your dumbbells can do':''}</div>`
+        : '<div class="st" style="margin-top:5px">first time — put in your working weight</div>'):''}
     </div>`;}).join('')}
   <div class="grid2" style="margin-top:16px">
     <button data-act="closes">Cancel</button>
-    <button class="pri" data-act="savesession" data-place="${place}">Save session</button>
+    <button class="pri" data-act="savesession" data-place="${place}" data-key="${key}">Save session</button>
   </div>
-  <div class="note" style="margin-top:10px">Hit 12 reps and the next suggestion goes up a step.</div>`);
+  <div class="note" style="margin-top:10px">All sets at the top of the range and the weight goes up next time.</div>`);
+}
+
+function cardioSheet(){
+  sheet(`
+  <h2 style="margin-top:0">Conditioning</h2>
+  <div class="seg" style="margin-top:10px">
+    ${Object.entries(PLACES).map(([k,v])=>
+      `<button data-act="cardioplace" data-arg="${k}">${v.label}</button>`).join('')}
+  </div>
+  <div id="cardioBody" class="note">Pick where you are.</div>`);
+}
+function cardioPlace(place){
+  const c=CARDIO[place];
+  document.getElementById('cardioBody').innerHTML=`
+    <div style="border-top:1px solid var(--line);padding-top:12px">
+      <b style="font-weight:500;color:var(--text)">${c.n}</b>
+      <div class="note" style="margin:4px 0 12px">${c.plan}</div>
+      <label class="lbl">Minutes</label>
+      <input id="c-min" type="number" inputmode="numeric" placeholder="35">
+      <div class="grid2"><button data-act="closes">Cancel</button>
+      <button class="pri" data-act="savecardio" data-place="${place}">Save</button></div>
+    </div>`;
 }
 
 function ingRow(i){
