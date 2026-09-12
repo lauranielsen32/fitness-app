@@ -104,6 +104,7 @@ td:last-child{text-align:right;color:var(--dim)}
 const CFG_KEY='fit:cfg', DATA_KEY='fit:data', KONFLIKT_KEY='fit:data:konflikt',
       AI_KEY='fit:ai', AIMODEL_KEY='fit:aimodel', PHOTO_PRE='fit:photo:';
 
+const BUILD='2026-09-12 21:25';
 const PROD_HOST='fitness-app-alpha-pink-29.vercel.app';
 const DEV=(function(){const h=location.hostname,p=location.protocol;
   if(p!=='https:')return true;
@@ -725,7 +726,7 @@ function vSettings(){
     </div>
     <input id="file" type="file" accept="application/json,.json" class="hide">
   </div>
-  <div style="height:20px"></div>`;
+  <div class="note" style="text-align:center;padding:14px 0 24px">Build ${BUILD}</div>`;
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
