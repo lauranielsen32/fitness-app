@@ -533,17 +533,29 @@ function doneThisWeek(key){
   const wk=weekDays().map(d=>d.key);
   return S.training.log.some(x=>x.key===key&&wk.includes(x.d));
 }
-/* Anything scheduled for a day that has already passed and was not done. */
+/* A missed session is never repaid on top of another one — one session
+   a day, always. When more is outstanding than there are days left, the
+   lowest priority ones are gone for the week and the app says so. Glute
+   days outrank the rest, because that is the goal. Debt never crosses
+   into next week: Monday starts at zero. */
+const PRIORITY=['A','C','B','cardio'];
+const dayIdx=d=>d===0?7:d;                      // Sunday closes the week
 function owed(){
-  const t=new Date().getDay(), order=[1,2,4,6];
-  const idx=d=>d===0?7:d;                       // Sunday closes the week
-  return order.filter(d=>idx(d)<idx(t)&&!doneThisWeek(SCHEDULE[d])).map(d=>SCHEDULE[d]);
+  const t=dayIdx(new Date().getDay());
+  return [1,2,4,6].filter(d=>dayIdx(d)<t&&!doneThisWeek(SCHEDULE[d])).map(d=>SCHEDULE[d]);
+}
+function daysLeft(){return 8-dayIdx(new Date().getDay());}   // today included
+function weekPlan(){
+  const left=PRIORITY.filter(k=>!doneThisWeek(k)), room=daysLeft();
+  return{keep:left.slice(0,room),lost:left.slice(room)};
 }
 /* What the app tells her to do when she opens it. */
 function todaysJob(){
-  const d=new Date().getDay(), scheduled=SCHEDULE[d], debt=owed();
-  if(scheduled&&!doneThisWeek(scheduled))return{key:scheduled,why:'scheduled'};
-  if(debt.length)return{key:debt[0],why:'owed'};
+  const d=new Date().getDay(), scheduled=SCHEDULE[d], plan=weekPlan();
+  if(scheduled&&plan.keep.includes(scheduled))return{key:scheduled,why:'scheduled'};
+  const debt=owed().filter(k=>plan.keep.includes(k));
+  if(debt.length)return{key:PRIORITY.find(k=>debt.includes(k)),why:'owed'};
+  if(!scheduled&&plan.keep.length)return{key:plan.keep[0],why:'catchup'};
   return{key:null,why:scheduled?'done':'rest'};
 }
 function strengthLog(){return S.training.log.filter(x=>x.key&&ORDER.includes(x.key));}
@@ -764,7 +776,8 @@ function vTraining(){
   ${job.key?`
   <div class="card">
     <div class="between">
-      <div class="lbl">${job.why==='owed'?'You owe this from '+dayOf(job.key):'Today'}</div>
+      <div class="lbl">${job.why==='owed'?'You owe this from '+dayOf(job.key)
+        :job.why==='catchup'?'Moved to today':'Today'}</div>
       ${doCardio?`<span class="tag">${LONG.home.min} min</span>`:''}</div>
     <div class="mid" style="margin:4px 0 2px">${doCardio?'Cardio':key+' · '+sess.name}</div>
     <div class="st">${doCardio?'Bike or run at talking pace.':sess.sum+' · '+sess.blocks.length+' exercises'}</div>
@@ -793,6 +806,13 @@ function vTraining(){
       : debt.length?'Nothing scheduled, and nothing owed. Walk, eat your protein, sleep.'
         :'Nothing scheduled. Walk, eat your protein, sleep. That is the work today.'}</div>
   </div>`}
+
+  ${(()=>{const lost=weekPlan().lost;return lost.length?`<div class="card" style="border-color:var(--bad)">
+    <div class="lbl bad">Gone this week</div>
+    <div style="margin:3px 0 4px">${lost.map(k=>k==='cardio'?'Cardio':k+' · '+PROGRAM[k].name).join(', ')}</div>
+    <div class="note">${lost.length} session${lost.length>1?'s':''} outstanding and ${daysLeft()} day${daysLeft()>1?'s':''} left.
+      You do not stack them — one session a day. These are lost. Monday the count starts at zero.</div>
+  </div>`:'';})()}
 
   ${deloadDue()?`<div class="card warn">
     <div class="lbl">Week ${weeksTraining()}</div>
