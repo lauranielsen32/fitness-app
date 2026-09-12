@@ -768,9 +768,18 @@ function vTraining(){
       ${doCardio?`<span class="tag">${LONG.home.min} min</span>`:''}</div>
     <div class="mid" style="margin:4px 0 2px">${doCardio?'Cardio':key+' · '+sess.name}</div>
     <div class="st">${doCardio?'Bike or run at talking pace.':sess.sum+' · '+sess.blocks.length+' exercises'}</div>
-    ${job.why==='owed'?'<div class="st" style="margin-top:8px;color:var(--bad)">You skipped it. It does not disappear — do it today.</div>':''}
-    ${gap===0?'<div class="st" style="margin-top:8px;color:var(--bad)">You already trained today. Muscle is built while you recover. Go home.</div>'
-     :gap===1&&!doCardio?'<div class="st" style="margin-top:8px">Trained yesterday. This one hits different muscles — back-to-back days are fine.</div>':''}
+    ${(()=>{  /* one message, never two that contradict each other */
+      const line=(txt,bad)=>`<div class="st" style="margin-top:8px${bad?';color:var(--bad)':''}">${txt}</div>`;
+      if(gap===0&&job.why==='owed')
+        return line('You already trained today. This one moves to tomorrow — it still gets done.');
+      if(gap===0)
+        return line('You already trained today. Muscle is built while you recover. Go home.',1);
+      if(job.why==='owed')
+        return line('You skipped it. It does not disappear — do it today.',1);
+      if(gap===1&&!doCardio)
+        return line('Trained yesterday. This one hits different muscles — back-to-back days are fine.');
+      return '';
+    })()}
     <div class="lbl" style="margin:14px 0 7px">Where are you</div>
     <div class="seg" style="margin:0">${Object.entries(PLACES).map(([k,v])=>
       `<button data-act="${doCardio?'cardioplace2':'place'}" data-arg="${k}" data-key="${key||''}">${v.label}</button>`).join('')}</div>
