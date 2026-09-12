@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fitness</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<style>
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{background:#fff;color:#111;margin:0;padding:12px;font:16px/1.4 system-ui,sans-serif;max-width:640px}
+h2{font-size:16px;margin:20px 0 6px}
+button{font:inherit;padding:8px 12px;margin:0 4px 4px 0}
+input{font:inherit;padding:8px;width:100%;max-width:320px;display:block;margin:0 0 8px}
+label{display:block;font-size:13px;margin-bottom:2px}
+pre{background:#eee;padding:8px;overflow:auto;font-size:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+#status{border:1px solid #ccc;padding:8px;font-size:14px;position:sticky;top:0;background:#fff}
+#sidst{font-size:13px;color:#555}
+#kvit{font-size:13px;min-height:1.4em}
+.skjul{display:none}
+.boks{border:1px solid #ccc;padding:8px;margin:8px 0}
+.fejl{color:#a00}
+</style>
+</head>
+<body>
+
+<div id="status">
+  <span><span class="dot" id="dot"></span><span id="tilstand">…</span></span>
+  <div id="sidst"></div>
+  <div id="kvit"></div>
+</div>
+
+<h2>Data</h2>
+<button id="btn-demo">Tilføj testpas</button>
+<button id="btn-ryd">Ryd testpas</button>
+<pre id="dump"></pre>
+
+<h2>Indstillinger</h2>
+<div class="boks">
+  <label for="f-owner">GitHub-brugernavn (owner)</label>
+  <input id="f-owner" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label for="f-repo">Repo-navn</label>
+  <input id="f-repo" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label for="f-token">Token</label>
+  <input id="f-token" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button id="btn-forbind">Forbind</button>
+  <div id="forbind-besked"></div>
+</div>
+
+<div class="boks skjul" id="valg">
+  <div id="valg-tekst"></div>
+  <button id="btn-valg-hent">Hent repoets data ind</button>
+  <button id="btn-valg-op">Læg mine lokale data op</button>
+  <button id="btn-valg-fortryd">Fortryd</button>
+</div>
+
+<div class="boks">
+  <button id="btn-pull">Hent nyeste nu</button>
+  <button id="btn-push">Gem op nu</button>
+  <button id="btn-afbryd">Afbryd på denne enhed</button>
+  <button id="btn-kopi" class="skjul">Hent kopi</button>
+</div>
+
+<div class="boks">
+  <button id="btn-eksport">Eksportér backup</button>
+  <button id="btn-import">Importér backup</button>
+  <input id="f-fil" type="file" accept="application/json,.json" class="skjul">
+</div>
+
+<p style="font-size:13px;color:#555">
+Tokenet skal være et <b>fine-grained</b> personal access token med adgang til
+<b>kun det ene private repo</b> og tilladelsen <b>Contents: Read and write</b>.
+Det sendes udelukkende til github.com og gemmes kun i localStorage på denne enhed —
+aldrig i koden og aldrig i repoet.
+</p>
+
+<script>
+/* ── Nøgler ─────────────────────────────────────────────────────────── */
+const CFG_KEY      = 'fit:cfg';
+const DATA_KEY     = 'fit:data';
+const KONFLIKT_KEY = 'fit:data:konflikt';
+
+/* ── Udviklingstilstand ─────────────────────────────────────────────────
+   Sæt PROD_HOST til dit Vercel-produktionsdomæne. Så er ALT andet
+   (file://, localhost, 127.0.0.1, http, preview-deployments) udvikling:
+   der læses fra GitHub, men skrives aldrig.
+   Er PROD_HOST tom, regnes ethvert https-domæne der ikke er lokalt som drift. */
+const PROD_HOST = '';
+const DEV = (function () {
+  const h = location.hostname, p = location.protocol;
+  if (p !== 'https:') return true;
+  if (h === 'localhost' || h === '127.0.0.1' || h === '' || h.endsWith('.local')) return true;
+  if (PROD_HOST) return h !== PROD_HOST;
+  return false;
+})();
+
+/* ── Enhedsnavn ─────────────────────────────────────────────────────── */
+const ENHED = (function () {
+  const u = navigator.userAgent;
+  if (/iPhone/.test(u)) return 'iPhone';
+  if (/iPad/.test(u)) return 'iPad';
+  if (/Android/.test(u)) return 'Android';
+  if (/Macintosh|Mac OS X/.test(u)) return 'Mac';
+  if (/Windows/.test(u)) return 'PC';
+  return 'Ukendt';
+})();
+
+/* ── Datamodel ──────────────────────────────────────────────────────── */
+function tomS() {
+  return { meta: { at: 0, dev: '', v: 1 }, pas: [], øvelser: [], mål: [] };
+}
+let S = tomS();
+
+/* ── UTF-8-sikker base64 ────────────────────────────────────────────── */
+function tilB64(str) {
+  const b = new TextEncoder().encode(str);
+  let s = '';
+  for (let i = 0; i < b.length; i += 8192) {
+    s += String.fromCharCode.apply(null, b.subarray(i, i + 8192));
+  }
+  return btoa(s);
+}
+function fraB64(b64) {
+  const bin = atob(String(b64).replace(/\s/g, ''));
+  const b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(b);
+}
+
+/* ── Konfiguration ──────────────────────────────────────────────────── */
+let cfg = null;
+let sha = null;
+function læsCfg() {
+  try { cfg = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); }
+  catch (e) { cfg = null; }
+  if (cfg && (!cfg.owner || !cfg.repo || !cfg.token)) cfg = null;
+}
+function skrivCfg(c) { cfg = c; localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
+function forbundet() { return !!cfg; }
+
+/* ── GitHub ─────────────────────────────────────────────────────────── */
+function url() {
+  return 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) +
+         '/' + encodeURIComponent(cfg.repo) + '/contents/' + cfg.path;
+}
+function headers() {
+  return {
+    'Authorization': 'Bearer ' + cfg.token,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+}
+async function ghFejl(r) {
+  let t = '';
+  try { t = (await r.json()).message || ''; } catch (e) {}
+  if (r.status === 401 || r.status === 403)
+    return new Error('Tokenet blev afvist (' + r.status + '). Det er udløbet, forkert, eller mangler Contents: Read and write.');
+  return new Error('GitHub svarede ' + r.status + (t ? ': ' + t : ''));
+}
+
+/* PULL. Returnerer {findes:false} ved 404 (filen er ikke oprettet endnu). */
+async function pull() {
+  const u = url() + '?ref=' + encodeURIComponent(cfg.branch) + '&t=' + Date.now();
+  const r = await fetch(u, { cache: 'no-store', headers: headers() });
+  if (r.status === 404) { sha = null; return { findes: false }; }
+  if (!r.ok) throw await ghFejl(r);
+  const j = await r.json();
+  sha = j.sha;
+  let data;
+  try { data = JSON.parse(fraB64(j.content)); }
+  catch (e) { throw new Error('data.json i repoet kunne ikke læses som JSON.'); }
+  return { findes: true, data: data };
+}
+
+/* PUSH. Håndterer 409/422 = forældet sha. */
+async function push(besked) {
+  if (DEV) return { skrev: false, dev: true };
+  for (let forsøg = 0; forsøg < 3; forsøg++) {
+    const body = {
+      message: besked || ('Opdatering fra ' + ENHED),
+      content: tilB64(JSON.stringify(S, null, 2)),
+      branch: cfg.branch
+    };
+    if (sha) body.sha = sha;
+    const r = await fetch(url(), {
+      method: 'PUT',
+      cache: 'no-store',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, headers()),
+      body: JSON.stringify(body)
+    });
+    if (r.ok) {
+      const j = await r.json();
+      sha = j.content.sha;
+      return { skrev: true };
+    }
+    if (r.status === 409 || r.status === 422) {
+      const rem = await pull();                       // opdaterer sha
+      const remAt = rem.findes ? (rem.data?.meta?.at || 0) : 0;
+      if (rem.findes && remAt > (S.meta.at || 0)) {
+        localStorage.setItem(KONFLIKT_KEY, JSON.stringify(S));
+        S = rem.data;
+        localStorage.setItem(DATA_KEY, JSON.stringify(S));
+        tegn();
+        return { skrev: false, konflikt: true, dev: false };
+      }
+      continue;                                        // prøv igen med frisk sha
+    }
+    throw await ghFejl(r);
+  }
+  throw new Error('Kunne ikke gemme efter 3 forsøg — prøv "Gem op nu" igen.');
+}
+
+/* ── Gemning ────────────────────────────────────────────────────────── */
+let timer = null, ugemt = false, igang = false, sidsteFejl = '';
+
+function save(now) {
+  S.meta.at = Date.now();
+  S.meta.dev = ENHED;
+  try { localStorage.setItem(DATA_KEY, JSON.stringify(S)); }
+  catch (e) { sidsteFejl = 'Kunne ikke skrive til localStorage: ' + e.message; }
+  clearTimeout(timer);
+  if (!forbundet() || DEV) { ugemt = false; status(); return Promise.resolve(); }
+  ugemt = true; status();
+  if (now) return gemNu();
+  timer = setTimeout(gemNu, 600);
+  return Promise.resolve();
+}
+
+async function gemNu() {
+  clearTimeout(timer);
+  if (!forbundet() || DEV) { ugemt = false; status(); return; }
+  igang = true; sidsteFejl = ''; status();
+  try {
+    const r = await push('Opdatering fra ' + ENHED);
+    ugemt = false;
+    if (r.konflikt) {
+      kvit('Den anden enhed var nyere. Dens version er hentet ind. Dine sidste ændringer ligger som kopi — brug "Hent kopi".', true);
+    } else {
+      kvit('Gemt ' + kl(Date.now()));
+    }
+  } catch (e) {
+    sidsteFejl = e.message;
+    kvit('Kunne ikke gemme: ' + e.message, true);
+  } finally {
+    igang = false; status();
+  }
+}
+
+/* ── Automatisk hentning ────────────────────────────────────────────── */
+async function hentHvisNyere(stille) {
+  if (!forbundet() || ugemt || igang) return;
+  igang = true; status();
+  try {
+    const rem = await pull();
+    if (rem.findes && (rem.data?.meta?.at || 0) > (S.meta.at || 0)) {
+      S = rem.data;
+      localStorage.setItem(DATA_KEY, JSON.stringify(S));
+      tegn();
+      kvit('Hentet nyeste version (' + (S.meta.dev || '?') + ', ' + kl(S.meta.at) + ')');
+    } else if (!stille) {
+      kvit(rem.findes ? 'Du har allerede den nyeste version.' : 'Der ligger ingen data.json i repoet endnu.');
+    }
+    sidsteFejl = '';
+  } catch (e) {
+    sidsteFejl = e.message;
+    if (!stille) kvit('Kunne ikke hente: ' + e.message, true);
+  } finally {
+    igang = false; status();
+  }
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') hentHvisNyere(true);
+});
+
+/* ── Status ─────────────────────────────────────────────────────────── */
+function kl(ms) {
+  if (!ms) return '—';
+  const d = new Date(ms);
+  return String(d.getHours()).padStart(2, '0') + ':' +
+         String(d.getMinutes()).padStart(2, '0') + ':' +
+         String(d.getSeconds()).padStart(2, '0');
+}
+let kvitTimer = null;
+function kvit(tekst, erFejl) {
+  const el = document.getElementById('kvit');
+  el.textContent = tekst;
+  el.className = erFejl ? 'fejl' : '';
+  clearTimeout(kvitTimer);
+  if (!erFejl) kvitTimer = setTimeout(function () { el.textContent = ''; }, 6000);
+}
+function status() {
+  let farve, tekst;
+  if (sidsteFejl)            { farve = '#c00'; tekst = 'Sync fejlede: ' + sidsteFejl; }
+  else if (!forbundet())     { farve = '#888'; tekst = 'Kun denne enhed — ikke forbundet til GitHub'; }
+  else if (DEV)              { farve = '#e90'; tekst = 'Udviklingstilstand — læser fra GitHub, skriver ikke'; }
+  else if (igang)            { farve = '#06c'; tekst = 'Gemmer…'; }
+  else if (ugemt)            { farve = '#e90'; tekst = 'Ugemte ændringer'; }
+  else                       { farve = '#0a0'; tekst = 'Forbundet til GitHub'; }
+  document.getElementById('dot').style.background = farve;
+  document.getElementById('tilstand').textContent = tekst;
+  document.getElementById('sidst').textContent =
+    'Sidst gemt ' + kl(S.meta.at) + (S.meta.dev ? ' (' + S.meta.dev + ')' : '');
+  document.getElementById('btn-kopi').classList.toggle('skjul', !localStorage.getItem(KONFLIKT_KEY));
+  document.getElementById('btn-push').disabled = DEV || !forbundet();
+}
+
+/* ── UI ─────────────────────────────────────────────────────────────── */
+function tegn() {
+  document.getElementById('dump').textContent = JSON.stringify(S, null, 2);
+  status();
+}
+
+document.getElementById('btn-demo').onclick = function () {
+  S.pas.push({ id: Date.now(), dato: new Date().toISOString().slice(0, 10), navn: 'Testpas på ø-træning', enhed: ENHED });
+  tegn(); save();
+};
+document.getElementById('btn-ryd').onclick = function () {
+  S.pas = []; tegn(); save();
+};
+
+/* Forbind */
+document.getElementById('btn-forbind').onclick = async function () {
+  const besk = document.getElementById('forbind-besked');
+  const c = {
+    owner: document.getElementById('f-owner').value.trim(),
+    repo:  document.getElementById('f-repo').value.trim(),
+    token: document.getElementById('f-token').value.trim(),
+    path:  'data.json',
+    branch: 'main'
+  };
+  if (!c.owner || !c.repo || !c.token) { besk.textContent = 'Udfyld alle tre felter.'; besk.className = 'fejl'; return; }
+  besk.className = ''; besk.textContent = 'Kontakter GitHub…';
+  const gammel = cfg; cfg = c;
+  let rem;
+  try { rem = await pull(); }
+  catch (e) { cfg = gammel; besk.textContent = e.message; besk.className = 'fejl'; return; }
+
+  const lokaltIndhold = (S.meta.at || 0) > 0;
+  if (rem.findes && lokaltIndhold) {
+    cfg = gammel;
+    visValg(c, rem);
+    besk.textContent = '';
+    return;
+  }
+  skrivCfg(c);
+  if (rem.findes) {
+    S = rem.data;
+    localStorage.setItem(DATA_KEY, JSON.stringify(S));
+    tegn();
+    besk.textContent = 'Forbundet. Data hentet fra repoet.';
+  } else {
+    besk.textContent = DEV
+      ? 'Forbundet. Repoet er tomt, og der skrives ikke i udviklingstilstand.'
+      : 'Forbundet. Repoet er tomt — dine data lægges op ved næste gemning.';
+    tegn();
+    if (!DEV) save(true);
+  }
+  document.getElementById('f-token').value = '';
+};
+
+function visValg(c, rem) {
+  const boks = document.getElementById('valg');
+  boks.classList.remove('skjul');
+  document.getElementById('valg-tekst').textContent =
+    'Der ligger allerede data i repoet (skrevet ' + kl(rem.data?.meta?.at) + ' af ' +
+    (rem.data?.meta?.dev || '?') + '). Du har også data på denne enhed (' + kl(S.meta.at) + '). Hvad skal der ske?';
+  document.getElementById('btn-valg-hent').onclick = function () {
+    localStorage.setItem(KONFLIKT_KEY, JSON.stringify(S));
+    skrivCfg(c);
+    S = rem.data;
+    localStorage.setItem(DATA_KEY, JSON.stringify(S));
+    boks.classList.add('skjul');
+    tegn();
+    kvit('Repoets data hentet ind. Dine tidligere lokale data ligger som kopi — brug "Hent kopi".');
+    document.getElementById('f-token').value = '';
+  };
+  document.getElementById('btn-valg-op').onclick = function () {
+    skrivCfg(c);
+    boks.classList.add('skjul');
+    tegn();
+    document.getElementById('f-token').value = '';
+    if (DEV) kvit('Forbundet, men der skrives ikke i udviklingstilstand.', true);
+    else save(true);
+  };
+  document.getElementById('btn-valg-fortryd').onclick = function () {
+    boks.classList.add('skjul');
+  };
+}
+
+document.getElementById('btn-pull').onclick = function () {
+  if (!forbundet()) return kvit('Ikke forbundet.', true);
+  if (ugemt) return kvit('Du har ugemte ændringer. Gem dem først.', true);
+  hentHvisNyere(false);
+};
+document.getElementById('btn-push').onclick = function () { save(true); };
+document.getElementById('btn-afbryd').onclick = function () {
+  localStorage.removeItem(CFG_KEY);
+  cfg = null; sha = null; sidsteFejl = '';
+  document.getElementById('f-token').value = '';
+  status();
+  kvit('Tokenet er slettet på denne enhed. Data i repoet er urørt.');
+};
+document.getElementById('btn-kopi').onclick = function () {
+  const raw = localStorage.getItem(KONFLIKT_KEY);
+  if (!raw) return;
+  const kopi = JSON.parse(raw);
+  localStorage.setItem(KONFLIKT_KEY, JSON.stringify(S));   // byt om, så intet går tabt
+  S = kopi;
+  tegn(); save();
+  kvit('Kopien er hentet ind. Den version du havde før, ligger nu som kopi.');
+};
+
+/* Eksport / import */
+document.getElementById('btn-eksport').onclick = function () {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fitness-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+};
+document.getElementById('btn-import').onclick = function () { document.getElementById('f-fil').click(); };
+document.getElementById('f-fil').onchange = async function (e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data || typeof data !== 'object' || !data.meta) throw new Error('Filen ligner ikke en backup.');
+    localStorage.setItem(KONFLIKT_KEY, JSON.stringify(S));
+    S = data;
+    if (!S.meta) S.meta = { at: 0, dev: '', v: 1 };
+    tegn(); save();
+    kvit('Backup importeret. Dine tidligere data ligger som kopi — brug "Hent kopi".');
+  } catch (err) {
+    kvit('Kunne ikke importere: ' + err.message, true);
+  }
+  e.target.value = '';
+};
+
+/* ── Opstart ────────────────────────────────────────────────────────── */
+(function boot() {
+  try {
+    const raw = localStorage.getItem(DATA_KEY);
+    if (raw) S = Object.assign(tomS(), JSON.parse(raw));
+  } catch (e) {}
+  læsCfg();
+  if (cfg) {
+    document.getElementById('f-owner').value = cfg.owner;
+    document.getElementById('f-repo').value = cfg.repo;
+  }
+  tegn();
+  if (cfg) hentHvisNyere(true);
+})();
+</script>
+</body>
+</html>
