@@ -298,8 +298,13 @@ async function aiModel(){
   const j=await r.json();
   const ok=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')
     &&!/image|tts|live|embedding|audio/i.test(m.name));
-  const flash=ok.filter(m=>/flash/i.test(m.name)&&!/lite/i.test(m.name));
-  const pick=(flash[0]||ok.filter(m=>/flash/i.test(m.name))[0]||ok[0]);
+  const names=ok.map(m=>m.name.replace('models/',''));
+  const flash=names.filter(n=>/flash/.test(n)&&!/lite|preview|omni/.test(n));
+  const best=flash.includes('gemini-flash-latest')?'gemini-flash-latest'
+    :flash.filter(n=>/^gemini-[\d.]+-flash$/.test(n))
+          .sort((a,b)=>parseFloat(b.split('-')[1])-parseFloat(a.split('-')[1]))[0]
+    ||flash[0]||names[0];
+  const pick=best?{name:best}:null;
   if(!pick)throw new Error('No usable model found on this key.');
   modelCache=pick.name.replace('models/','');
   localStorage.setItem(AIMODEL_KEY,modelCache);
