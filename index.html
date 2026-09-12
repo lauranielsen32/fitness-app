@@ -469,7 +469,7 @@ const PLACES={home:{label:'Home',kit:'Dumbbells 2–24 kg',step:2},
               out:{label:'Out',kit:'Bodyweight and running',step:0}};
 
 const PROGRAM={
- A:{name:'Glutes heavy + push',
+ A:{name:'Glutes heavy + push',sum:'Glutes · Chest · Shoulders · Core',
     why:'Loaded hip extension first while you are fresh, then a stretch-position glute, then upper-body push. Lateral raises are here on purpose: wider shoulders make the waist read smaller.',
     warm:'5 min bike, 15 glute bridges, 20 band side-steps, 1 light set of the first exercise.',
     blocks:[
@@ -479,7 +479,7 @@ const PROGRAM={
   {p:'Glute · abduct', home:'Side-lying abduction',gym:'Cable abduction',     out:'Band side-step',          sets:3,lo:15,hi:20},
   {p:'Shoulders',      home:'Lateral raise',       gym:'Lateral raise',       out:'Pike push-up',            sets:3,lo:12,hi:15},
   {p:'Core · anti-ext',home:'Dead bug',            gym:'Dead bug',            out:'Dead bug',                sets:3,lo:8, hi:12}]},
- B:{name:'Hinge + pull',
+ B:{name:'Hinge + pull',sum:'Hamstrings · Glutes · Back · Core',
     why:'The RDL is the biggest glute-and-hamstring stretch you own, so it leads. Everything else is back work — a stronger back is the other half of the shoulder-to-waist ratio.',
     warm:'5 min easy cardio, 10 hip hinges with no weight, 2 light sets of the RDL.',
     blocks:[
@@ -489,7 +489,7 @@ const PROGRAM={
   {p:'Row',            home:'One-arm row',         gym:'Chest-supported row', out:'Inverted row',            sets:3,lo:8, hi:12},
   {p:'Rear delt',      home:'Rear delt raise',     gym:'Face pull',           out:'Band pull-apart',         sets:2,lo:12,hi:15},
   {p:'Core · anti-rot',home:'Pallof press',        gym:'Pallof press',        out:'Side plank',              sets:3,lo:10,hi:12}]},
- C:{name:'Glutes volume + arms',
+ C:{name:'Glutes volume + arms',sum:'Glutes · Quads · Shoulders · Arms',
     why:'Higher reps and shorter rests on the glutes today, so the two heavy days stay heavy. Quads get one squat to hold what you have — volume goes to the glutes instead. Direct arm work so triceps are not left to chance.',
     warm:'5 min bike, 20 band side-steps, 1 light set of the bridge.',
     blocks:[
@@ -722,25 +722,60 @@ async function paintThumbs(){
 }
 
 function vTraining(){
+  const wk=thisWeekCount();
+  const strengthLeft=3-wk.strength, cardioLeft=1-wk.cardio;
+  /* One question only: what am I doing today. Strength first until the
+     three are in the bank, then the easy session. */
+  const doCardio=strengthLeft<=0&&cardioLeft>0;
   const key=nextKey(), sess=PROGRAM[key];
   const last=lastTraining(), gap=last?daysSince(last.d):99;
-  const wk=thisWeekCount();
-  const log=S.training.log.slice().reverse().slice(0,8);
+  const done=k=>S.training.log.some(x=>x.key===k&&weekDays().map(d=>d.key).includes(x.d));
+  const chip=(label,on)=>`<div style="flex:1;text-align:center;padding:9px 2px;border-radius:9px;
+    background:${on?'var(--sage-dim)':'#0a0c0b'};color:${on?'var(--text)':'var(--dim)'};font-size:13px">
+    ${on?'✓ ':''}${label}</div>`;
+  const log=S.training.log.slice().reverse().slice(0,6);
   return `
   <h1>Training</h1>
+
   <div class="card">
-    <div class="between"><div class="lbl">Next up</div>
-      <span class="tag">${wk.strength}/3 strength · ${wk.cardio}/1 cardio this week</span></div>
-    <div class="mid" style="margin:4px 0 2px">${key} · ${sess.name}</div>
-    <div class="st">${sess.blocks.map(b=>b.p).join(' · ')}</div>
-    ${gap===0?'<div class="st" style="margin-top:9px;color:var(--bad)">You already trained today. Muscle is built while you recover, not while you grind. Go home.</div>'
-     :gap===1?'<div class="st" style="margin-top:9px">Trained yesterday. Different patterns today. No reason to sit this one out.</div>':''}
-    <div class="seg" style="margin-top:12px">
-      ${Object.entries(PLACES).map(([k,v])=>
-        `<button data-act="place" data-arg="${k}">${v.label}</button>`).join('')}
+    <div class="lbl" style="margin-bottom:9px">Your week · 4 sessions</div>
+    <div class="row" style="gap:6px">
+      ${chip('A',done('A'))}${chip('B',done('B'))}${chip('C',done('C'))}${chip('Cardio',done('cardio'))}
     </div>
-    <div class="note">Where are you. The session does not change — only the equipment does.</div>
+    <div class="note" style="margin-top:9px">${(()=>{
+      if(strengthLeft<=0&&cardioLeft<=0)return 'All four done. Nothing left to negotiate.';
+      if(strengthLeft<=0)return 'Only the easy session left this week.';
+      if(cardioLeft<=0)return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' left this week.';
+      return strengthLeft+' lifting session'+(strengthLeft>1?'s':'')+' and the easy session left this week.';
+    })()}</div>
   </div>
+
+  ${strengthLeft<=0&&cardioLeft<=0?`
+  <div class="card"><div class="lbl">Today</div>
+    <div class="mid" style="margin:4px 0">Rest</div>
+    <div class="note">The week is done. Walk, eat your protein, sleep. That is the work now.</div>
+  </div>`:doCardio?`
+  <div class="card">
+    <div class="between"><div class="lbl">Today</div><span class="tag">${LONG.home.min} min</span></div>
+    <div class="mid" style="margin:4px 0 2px">Easy session</div>
+    <div class="note" style="margin-bottom:12px">Bike or run, talking pace. The three lifting days are in the bank.</div>
+    <div class="seg">${Object.entries(PLACES).map(([k,v])=>
+      `<button data-act="cardioplace2" data-arg="${k}">${v.label}</button>`).join('')}</div>
+    <div id="cardioBody"></div>
+  </div>`:`
+  <div class="card">
+    <div class="lbl">Today</div>
+    <div class="mid" style="margin:4px 0 2px">${key} · ${sess.name}</div>
+    <div class="st">${sess.sum} · ${sess.blocks.length} exercises</div>
+    ${gap===0?'<div class="st" style="margin-top:9px;color:var(--bad)">You already trained today. Muscle is built while you recover. Go home.</div>'
+     :gap===1?'<div class="st" style="margin-top:9px">Trained yesterday. This one hits different muscles — back-to-back days are fine.</div>':''}
+    <div class="lbl" style="margin:14px 0 7px">Where are you</div>
+    <div class="seg" style="margin:0">${Object.entries(PLACES).map(([k,v])=>
+      `<button data-act="place" data-arg="${k}">${v.label}</button>`).join('')}</div>
+  </div>
+  ${cardioLeft>0?`<button class="wide ghost sm" data-act="cardio" style="margin-bottom:10px">
+     Not lifting today — do the easy session instead</button>`:''}`}
+
   ${deloadDue()?`<div class="card warn">
     <div class="lbl">Week ${weeksTraining()}</div>
     <div>Deload week</div>
@@ -748,29 +783,7 @@ function vTraining(){
       One week. Take it. Skipping it is how you stall for a month instead.</div>
     <button class="sm" style="margin-top:10px" data-act="deloaddone">Deload taken</button></div>`:''}
 
-  <div class="card">
-    <div class="between" style="margin-bottom:2px">
-      <div class="lbl">Fourth day · conditioning</div>
-      <span class="tag">${wk.cardio?'done this week':LONG.home.min+' min'}</span></div>
-    <div>${wk.cardio?'Done — the rest of the week is steps and recovery':'Long easy session'}</div>
-    <div class="note" style="margin-top:4px">${wk.cardio
-      ? 'Done. A second hard session on 1800 kcal costs you more than it gives.'
-      : 'On a day you have not lifted. Not negotiable — it is the fourth day of four.'}</div>
-    ${wk.cardio?'':'<button class="sm" style="margin-top:10px" data-act="cardio">Start it</button>'}
-  </div>
-
-  <h2>Rotation</h2>
-  <div class="card">
-    ${ORDER.map(k=>{
-      const done=strengthLog().filter(x=>x.key===k).slice(-1)[0];
-      return `<div class="between" style="padding:8px 0;border-bottom:1px solid var(--line)">
-        <span class="${k===key?'sage':''}">${k} · ${PROGRAM[k].name}</span>
-        <span class="st">${done?done.d:'not done yet'}</span></div>`;}).join('')}
-    <div class="note" style="margin-top:10px">Three sessions, in this order, every week. Miss one and you do not
-      skip it — you move it. 48 hours between sessions that share a pattern.</div>
-  </div>
-
-  <h2>History</h2>
+  <h2>Done</h2>
   <div class="card">
     ${log.length?log.map(x=>`
       <div class="item">
@@ -779,8 +792,8 @@ function vTraining(){
           <div class="st">${x.d} · ${PLACES[x.place]?PLACES[x.place].label:x.place}${
             x.key==='cardio'?'':' · '+x.ex.reduce((a,e)=>a+e.sets.length,0)+' sets'}</div>
         </div>
-        ${x.key==='cardio'?`<span class="tag">${x.min} min</span>`:''}
-      </div>`).join(''):'<div class="note">No sessions yet.</div>'}
+        ${x.min?`<span class="tag">${x.min} min</span>`:''}
+      </div>`).join(''):'<div class="note">Nothing yet. Pick where you are and start.</div>'}
   </div>`;
 }
 
@@ -1040,6 +1053,7 @@ async function act(name,arg,el){
 
   case 'cardio': cardioSheet(); break;
   case 'cardioplace': cardioPlace(arg); break;
+  case 'cardioplace2': cardioPlace(arg); break;
   case 'savecardio':{
     const place=el.dataset.place, min=num('c-min');
     if(!min){toast('How many minutes?',true);return;}
