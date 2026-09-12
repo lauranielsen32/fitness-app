@@ -444,18 +444,30 @@ const PROGRAM={
   {p:'Biceps',         home:'Biceps curl',         gym:'Biceps curl',         out:'Chin-up hold',            sets:2,lo:10,hi:15}]}
 };
 const ORDER=['A','B','C'];
-const CARDIO={
- home:{n:'Bike',plan:'Hard: 10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down. Easy: 30 min you could hold a conversation through.'},
- gym: {n:'Bike',plan:'Hard: 10 min easy, then 8 × (1 min hard / 2 min easy), 5 min down. Easy: 30 min you could hold a conversation through.'},
- out: {n:'Run', plan:'Hard: 6 × 2 min quick with 2 min walk. Easy: 30–40 min at talking pace.'}
+/* Conditioning is prescribed, not optional. Intervals live on day C,
+   because that is the day the legs took the least load — putting them
+   after heavy hip thrusts or RDLs eats the recovery you just paid for.
+   A and B finish easy. The fourth day is the long easy session. */
+const FINISH={
+ A:{n:'Easy bike',    min:15,how:'Zone 2. You can talk the whole way. RPE 4 out of 10.',
+    why:'Flushes the legs. Anything harder competes with the glute work you just did.'},
+ B:{n:'Easy bike',    min:15,how:'Zone 2. Nose breathing if you can. RPE 4 out of 10.',
+    why:'Hamstrings and lower back are loaded. Light work now means they recover faster.'},
+ C:{n:'Bike intervals',min:20,how:'5 min easy, then 8 × (1 min hard / 2 min easy), 3 min down. Hard means you cannot talk.',
+    why:'Legs took the least beating today. This is where the hard work belongs.'}
 };
-/* Tacking conditioning onto a lifting day is fine — after the weights,
-   never before. On the two glute-heavy days keep it easy so it does not
-   eat the recovery you just paid for. */
-function cardioAdvice(key){
-  return key==='B'||key==='A'
-    ? 'Keep it easy today — you just loaded the glutes and hamstrings.'
-    : 'Intervals are fine today, the legs took less of a beating.';
+const FINISH_OUT={
+ A:{n:'Easy walk',how:'Brisk but conversational, 15 min. RPE 4 out of 10.'},
+ B:{n:'Easy walk',how:'Brisk but conversational, 15 min. RPE 4 out of 10.'},
+ C:{n:'Run intervals',how:'5 min jog, then 6 × (1 min quick / 2 min walk), 3 min walk down.'}};
+const LONG={
+ home:{n:'Long easy bike',min:35,how:'Steady zone 2, one podcast long. RPE 4–5.'},
+ gym: {n:'Long easy bike',min:35,how:'Steady zone 2, one podcast long. RPE 4–5.'},
+ out: {n:'Easy run',      min:35,how:'Talking pace the whole way. If you cannot talk, slow down.'}
+};
+function finishFor(key,place){
+  const f=FINISH[key], o=FINISH_OUT[key];
+  return place==='out'?{n:o.n,min:f.min,how:o.how,why:f.why}:{n:f.n,min:f.min,how:f.how,why:f.why};
 }
 const STEP_GOAL=9000;
 
@@ -664,11 +676,14 @@ function vTraining(){
     <button class="sm" style="margin-top:10px" data-act="deloaddone">Deload taken</button></div>`:''}
 
   <div class="card">
-    <div class="between">
-      <div><div class="lbl">Conditioning</div>
-        <div style="margin-top:2px">${wk.cardio?'Done this week':'One session left this week'}</div></div>
-      <button class="sm" data-act="cardio">Log</button>
-    </div>
+    <div class="between" style="margin-bottom:2px">
+      <div class="lbl">Fourth day · conditioning</div>
+      <span class="tag">${wk.cardio?'done this week':LONG.home.min+' min'}</span></div>
+    <div>${wk.cardio?'Done — the rest of the week is steps and recovery':'Long easy session'}</div>
+    <div class="note" style="margin-top:4px">${wk.cardio
+      ? 'Two hard conditioning sessions in a week you eat 1800 kcal in is one too many.'
+      : 'Steady and easy, on a day you have not lifted. The intervals already sit on day C.'}</div>
+    ${wk.cardio?'':'<button class="sm" style="margin-top:10px" data-act="cardio">Start it</button>'}
   </div>
 
   <h2>Rotation</h2>
@@ -956,7 +971,7 @@ async function act(name,arg,el){
     const place=el.dataset.place, min=num('c-min');
     if(!min){toast('How many minutes?',true);return;}
     S.training.log.push({id:Date.now(),d:today(),place:place,key:'cardio',
-      name:CARDIO[place].n,min:min,ex:[]});
+      name:LONG[place].n,min:min,ex:[]});
     closeSheet(); save(); render(); break;}
 
   case 'weigh':{
@@ -1145,13 +1160,19 @@ function sessionSheet(place){
                 (place==='home'?', a setting your dumbbells can do':'')}</div>`
         : '<div class="st" style="margin-top:5px">first time — put in your working weight</div>'):''}
     </div>`;}).join('')}
+  ${(()=>{const f=finishFor(key,place);return `
   <div class="card" style="margin-top:14px">
-    <div class="between"><div><div class="lbl">Finish with cardio</div>
-      <div class="note">${cardioAdvice(key)}</div></div>
-      <input id="s-cardio" type="number" inputmode="numeric" placeholder="min"
-        style="margin:0;width:82px;text-align:center">
+    <div class="between" style="margin-bottom:2px">
+      <div class="lbl">Finish with</div><span class="tag">${f.min} min</span></div>
+    <div style="margin-bottom:4px">${f.n}</div>
+    <div class="note">${f.how}</div>
+    <div class="note" style="margin-top:6px;color:var(--sage)">${f.why}</div>
+    <div class="row" style="margin-top:10px">
+      <input id="s-cardio" type="number" inputmode="numeric" value="${f.min}"
+        style="margin:0;width:90px;text-align:center">
+      <span class="st">minutes — change it if you cut it short, 0 if you skipped</span>
     </div>
-  </div>
+  </div>`;})()}
   <div class="grid2" style="margin-top:12px">
     <button data-act="closes">Cancel</button>
     <button class="pri" data-act="savesession" data-place="${place}" data-key="${key}">Save session</button>
@@ -1163,22 +1184,26 @@ function sessionSheet(place){
 function cardioSheet(){
   sheet(`
   <h2 style="margin-top:0">Conditioning</h2>
-  <div class="seg" style="margin-top:10px">
+  <div class="note" style="margin-bottom:10px">Where are you?</div>
+  <div class="seg">
     ${Object.entries(PLACES).map(([k,v])=>
       `<button data-act="cardioplace" data-arg="${k}">${v.label}</button>`).join('')}
   </div>
-  <div id="cardioBody" class="note">Pick where you are.</div>`);
+  <div id="cardioBody"></div>`);
 }
 function cardioPlace(place){
-  const c=CARDIO[place];
+  const c=LONG[place];
   document.getElementById('cardioBody').innerHTML=`
-    <div style="border-top:1px solid var(--line);padding-top:12px">
-      <b style="font-weight:500;color:var(--text)">${c.n}</b>
-      <div class="note" style="margin:4px 0 12px">${c.plan}</div>
-      <label class="lbl">Minutes</label>
-      <input id="c-min" type="number" inputmode="numeric" placeholder="35">
+    <div style="border-top:1px solid var(--line);padding-top:14px">
+      <div class="between" style="margin-bottom:2px">
+        <b style="font-weight:500;color:var(--text)">${c.n}</b><span class="tag">${c.min} min</span></div>
+      <div class="note" style="margin-bottom:5px">${c.how}</div>
+      <div class="note" style="margin-bottom:14px;color:var(--sage)">This one is for the heart and
+        for the daily deficit, not for the legs. If it leaves you sore, it was too hard.</div>
+      <label class="lbl">Minutes done</label>
+      <input id="c-min" type="number" inputmode="numeric" value="${c.min}">
       <div class="grid2"><button data-act="closes">Cancel</button>
-      <button class="pri" data-act="savecardio" data-place="${place}">Save</button></div>
+      <button class="pri" data-act="savecardio" data-place="${place}">Done</button></div>
     </div>`;
 }
 
