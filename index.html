@@ -399,15 +399,62 @@ async function aiFood(b64){
 /* Same model, no photo: she writes what she ate and it fills the numbers. */
 /* Her own products beat the AI's idea of an average supermarket.
    Written once in Settings, sent with every photo and description. */
+/* Each line carries how sure the model is that it knows the product:
+   green it has the numbers, amber it knows the brand but is guessing,
+   red it has never heard of it and you should add the number yourself. */
 function pantryList(){
   const v=S.pantry;
-  if(Array.isArray(v))return v.filter(x=>String(x).trim());
-  return String(v||'').split('\n').map(x=>x.trim()).filter(Boolean);   // old single-blob data
+  const norm=x=>typeof x==='string'?{t:x.trim(),conf:''}:{t:String(x&&x.t||'').trim(),conf:x&&x.conf||''};
+  if(Array.isArray(v))return v.map(norm).filter(x=>x.t);
+  return String(v||'').split('\n').map(t=>({t:t.trim(),conf:''})).filter(x=>x.t);
 }
 function pantryNote(){
   const l=pantryList();
   return l.length?' The person eats these specific products — use them, not standard versions: '+
-    l.map(x=>x.replace(/[.\s]+$/,'')).join('. ')+'.':'';
+    l.map(x=>x.t.replace(/[.\s]+$/,'')).join('. ')+'.':'';
+}
+const CONF={high:'#5e9c6a',medium:'#c9a227',low:'#c05555','':'#3a403c'};
+const CONF_TEXT={high:'Known product',medium:'Brand known, numbers estimated',
+                 low:'Not known — add the number from the pack','':'Not checked'};
+
+/* One short call per line, only when a line is added or changed. Queued,
+   because three at once trips the free tier's rate limit and they come
+   back empty. */
+let confQueue=Promise.resolve();
+function checkPantry(i){
+  confQueue=confQueue.then(()=>runCheck(i)).catch(()=>{});
+  return confQueue;
+}
+async function runCheck(i,retry){
+  if(!aiKey())return;
+  const l=pantryList(); if(!l[i])return;
+  try{
+    const models=await aiModels();
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[0]+':generateContent',
+      {method:'POST',headers:{'content-type':'application/json','x-goog-api-key':aiKey()},
+       body:JSON.stringify({contents:[{parts:[{text:
+        'A person says they eat this product: "'+l[i].t+'". '+
+        'How well do you know its nutrition per 100 g? Reply JSON only: {"confidence":"high"|"medium"|"low"}. '+
+        'high = you know this exact product and its numbers. '+
+        'medium = you know the brand or type but would be estimating the numbers. '+
+        'low = you do not know it, or the line names no product.'}]}],
+        generationConfig:{responseMimeType:'application/json',temperature:0}})});
+    if(!r.ok){
+      if(!retry&&(r.status===429||r.status===503)){
+        await new Promise(z=>setTimeout(z,2500));
+        return runCheck(i,1);
+      }
+      return;
+    }
+    const j=await r.json();
+    const o=JSON.parse(j.candidates?.[0]?.content?.parts?.[0]?.text||'{}');
+    const c=['high','medium','low'].includes(o.confidence)?o.confidence:'low';
+    const cur=pantryList(); if(!cur[i])return;
+    cur[i].conf=c; S.pantry=cur; save();
+    if(tab==='settings')render();
+  }catch(e){
+    if(!retry){await new Promise(z=>setTimeout(z,2500)); return runCheck(i,1);}
+  }
 }
 async function aiText(desc){
   if(!aiKey())throw new Error('No AI key — add one in Settings.');
@@ -974,10 +1021,10 @@ function vFood(){
 function wirePantry(){
   document.querySelectorAll('.pitem').forEach(inp=>{
     inp.onchange=function(){
-      const l=pantryList(); l[+inp.dataset.i]=inp.value.trim();
-      S.pantry=l.filter(Boolean); save();
-      inp.style.borderColor='var(--sage-dim)';
-      setTimeout(()=>{inp.style.borderColor='';},900);
+      const i=+inp.dataset.i, l=pantryList();
+      if(!l[i]||l[i].t===inp.value.trim())return;
+      l[i]={t:inp.value.trim(),conf:''}; S.pantry=l.filter(x=>x.t); save(); render();
+      checkPantry(i);
     };
   });
   const n=document.getElementById('p-new');
@@ -1234,17 +1281,26 @@ function vSettings(){
 
   <h2>What you actually buy</h2>
   <div class="card">
-    ${pantryList().length?pantryList().map((t,i)=>`
-      <div class="row" style="gap:8px;margin-bottom:7px">
-        <input class="pitem" data-i="${i}" value="${esc(t)}" style="margin:0">
-        <button class="sm" data-act="delpantry" data-arg="${i}" style="flex:none">✕</button>
+    ${pantryList().length?pantryList().map((x,i)=>`
+      <div style="margin-bottom:9px">
+        <div class="row" style="gap:8px">
+          <button data-act="recheck" data-arg="${i}" title="Check again"
+            style="flex:none;padding:10px 6px;background:none;border:0">
+            <span class="dot" style="background:${CONF[x.conf]}"></span></button>
+          <input class="pitem" data-i="${i}" value="${esc(x.t)}" style="margin:0">
+          <button class="sm" data-act="delpantry" data-arg="${i}" style="flex:none">✕</button>
+        </div>
+        <div class="st" style="margin:3px 0 0 15px">${CONF_TEXT[x.conf]}</div>
       </div>`).join(''):'<div class="note" style="margin-bottom:10px">Nothing yet.</div>'}
     <div class="row" style="gap:8px;margin-top:10px">
       <input id="p-new" placeholder="Granola is sugar-free" style="margin:0">
       <button class="sm pri" data-act="addpantry" style="flex:none">Add</button>
     </div>
-    <div class="note" style="margin-top:10px">One line per product. Sent with every photo, so the AI stops
-      pricing the standard supermarket version of what you eat. Edit a line and it saves itself.</div>
+    <div class="note" style="margin-top:10px">One line per product, sent with every photo.
+      <span style="color:#5e9c6a">Green</span> means the AI has the real numbers.
+      <span style="color:#c9a227">Amber</span> means it is estimating —
+      <span style="color:#c05555">red</span> means it has no idea. For those two, write the number from the
+      pack into the line: <i>Cheasy yoghurt, 38 kcal per 100 g</i>.</div>
   </div>
 
   <h2>Backup</h2>
@@ -1489,10 +1545,12 @@ async function act(name,arg,el){
 
   case 'addpantry':{
     const t=val('p-new').trim(); if(!t)return;
-    S.pantry=pantryList().concat(t);
-    save(); render();
+    const l=pantryList(); l.push({t:t,conf:''}); S.pantry=l;
+    save(); render(); checkPantry(l.length-1);
     setTimeout(()=>{const n=document.getElementById('p-new');if(n)n.focus();},50);
     break;}
+
+  case 'recheck': checkPantry(+arg); toast('Checking…'); break;
 
   case 'delpantry':{
     const l=pantryList(); l.splice(+arg,1); S.pantry=l;
