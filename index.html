@@ -361,8 +361,10 @@ async function aiFood(b64){
   const body=JSON.stringify({
     contents:[{parts:[
       {text:'Estimate the nutrition of the meal in this photo for the portion shown. '+
-            'Reply with JSON only: {"name":string,"kcal":number,"protein":number,"carbs":number,"fat":number}. '+
-            'Grams for protein/carbs/fat. Be realistic, not optimistic.'},
+            'Judge the weight from anything of known size in the frame — cutlery, a hand, the plate rim. '+
+            'Reply with JSON only: {"name":string,"grams":number,"kcal":number,"protein":number,'+
+            '"carbs":number,"fat":number}. grams is the total served weight. '+
+            'Grams for protein/carbs/fat. Count oil, butter and sauce. Be realistic, not optimistic.'},
       {inline_data:{mime_type:'image/jpeg',data:b64}}]}],
     generationConfig:{responseMimeType:'application/json',temperature:0.2}});
   let last='';
@@ -377,7 +379,8 @@ async function aiFood(b64){
         modelList=[models[i]].concat(models.filter((m,k)=>k!==i));
         localStorage.setItem(AIMODEL_KEY,JSON.stringify(modelList));
       }
-      return{name:String(o.name||'Meal'),kcal:Math.round(+o.kcal||0),
+      return{name:String(o.name||'Meal'),port:o.grams?Math.round(+o.grams)+' g':'',
+    kcal:Math.round(+o.kcal||0),
         p:Math.round(+o.protein||0),c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
     }
     let msg=''; try{msg=(await r.json()).error?.message||'';}catch(e){}
@@ -580,10 +583,21 @@ function foodHistory(){
     (S.food[d]||[]).forEach(x=>{
       const k=x.name.toLowerCase();
       if(seen[k])return; seen[k]=1;
-      out.push({n:x.name,port:'as logged',kcal:x.kcal,p:x.p,c:x.c,f:x.f,mine:1});
+      out.push({n:x.name,port:x.port||'as logged',kcal:x.kcal,p:x.p,c:x.c,f:x.f,mine:1});
     });
   });
   return out;
+}
+/* Amount in the unit the portion is measured in, so it can be scaled. */
+function amountOf(x){
+  const m=String(x.port).match(/^(\d+(?:\.\d+)?)\s*(g|ml)$/);
+  if(m)return{qty:parseFloat(m[1]),unit:m[2]};
+  return{qty:1,unit:'portion'};
+}
+function scaled(x,qty){
+  const a=amountOf(x), f=a.qty?qty/a.qty:1;
+  const r=v=>Math.round((+v||0)*f);
+  return{kcal:r(x.kcal),p:r(x.p),c:r(x.c),f:r(x.f)};
 }
 function searchFood(q){
   q=q.trim().toLowerCase();
@@ -896,7 +910,7 @@ function vFood(){
         ${x.photo?`<img class="thumb" data-photo="${x.photo}">`:''}
         <div style="flex:1;min-width:0">
           <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.name)}</div>
-          <div class="st">${x.kcal} kcal · ${x.p}P ${x.c}C ${x.f}F</div>
+          <div class="st">${x.port?esc(x.port)+" · ":""}${x.kcal} kcal · ${x.p}P ${x.c}C ${x.f}F</div>
         </div>
         <button class="ghost sm" data-act="edit" data-arg="${x.id}">Edit</button>
       </div>`).join(''):'<div class="note">Nothing logged. If it went in your mouth, it goes in here.</div>'}
@@ -1219,11 +1233,18 @@ async function act(name,arg,el){
 
   case 'quick':{
     const x=hits[+arg]; if(!x)return;
+    quickSheet(x); break;}
+
+  case 'quickmore':{
+    const x=hits[+arg]; if(!x)return;
+    const a=amountOf(x), q=parseFloat(val('qa'))||a.qty, n=scaled(x,q);
     const d=today();
     S.food[d]=S.food[d]||[];
-    S.food[d].push({id:Date.now(),t:Date.now(),name:x.n,kcal:x.kcal,p:x.p,c:x.c,f:x.f});
-    hits=[]; save(); render();
-    toast(x.n+' · '+x.kcal+' kcal'); break;}
+    S.food[d].push({id:Date.now(),t:Date.now(),
+      name:x.n, port:(a.unit==='portion'?(q===1?x.port:q+' × '+x.port):q+' '+a.unit),
+      kcal:n.kcal,p:n.p,c:n.c,f:n.f});
+    hits=[]; closeSheet(); save(); render();
+    toast(x.n+' · '+n.kcal+' kcal'); break;}
 
   case 'edit':{
     const d=today(), x=(S.food[d]||[]).find(y=>String(y.id)===String(arg));
@@ -1233,7 +1254,8 @@ async function act(name,arg,el){
     const d=today(), id=el.dataset.id;
     const entry={
       id:id||Date.now(), t:Date.now(),
-      name:val('f-name')||'Meal', kcal:num('f-kcal'), p:num('f-p'), c:num('f-c'), f:num('f-f')
+      name:val('f-name')||'Meal', port:val('f-port'),
+      kcal:num('f-kcal'), p:num('f-p'), c:num('f-c'), f:num('f-f')
     };
     S.food[d]=S.food[d]||[];
     const i=S.food[d].findIndex(y=>String(y.id)===String(entry.id));
@@ -1422,6 +1444,29 @@ const val=id=>{const e=document.getElementById(id);return e?e.value:'';};
 const num=id=>{const v=parseFloat(val(id));return isNaN(v)?0:Math.round(v);};
 
 /* ── sheets ─────────────────────────────────────────────────────── */
+function quickSheet(x){
+  const a=amountOf(x), i=hits.indexOf(x);
+  sheet(`
+  <h2 style="margin-top:0">${esc(x.n)}</h2>
+  <div class="note" style="margin-bottom:12px">Listed as ${esc(x.port)}. Change it if you had more or less.</div>
+  <label class="lbl">${a.unit==='portion'?'How many':'Amount in '+a.unit}</label>
+  <input id="qa" type="number" inputmode="decimal" step="${a.unit==='portion'?'0.5':'10'}" value="${a.qty}">
+  <div class="card" id="qprev" style="padding:12px"></div>
+  <div class="grid2" style="margin-top:12px">
+    <button data-act="closes">Cancel</button>
+    <button class="pri" data-act="quickmore" data-arg="${i}">Add</button>
+  </div>`);
+  const draw=()=>{
+    const q=parseFloat(val('qa'))||a.qty, n=scaled(x,q);
+    document.getElementById('qprev').innerHTML=
+      `<div class="between"><div class="lbl">Calories</div><div class="mid">${n.kcal}</div></div>
+       <div class="st" style="margin-top:4px">${n.p}g protein · ${n.c}g carbs · ${n.f}g fat</div>`;
+  };
+  draw();
+  const el=document.getElementById('qa');
+  el.oninput=draw; setTimeout(()=>{el.focus();el.select();},60);
+}
+
 function foodSheet(x){
   sheet(`
   <h2 style="margin-top:0">${x.id?'Edit':'Add'} food</h2>
@@ -1430,6 +1475,7 @@ function foodSheet(x){
      <div class="lbl bad">AI failed</div><div class="note">${esc(x.err)}</div>
      <div class="note" style="margin-top:6px">Type the numbers yourself, or try again.</div></div>`:''}
   <label class="lbl">Name</label><input id="f-name" value="${esc(x.name)}">
+  <label class="lbl">Amount</label><input id="f-port" value="${esc(x.port||'')}" placeholder="e.g. 150 g">
   <div class="grid2">
     <div><label class="lbl">Kcal</label><input id="f-kcal" type="number" inputmode="numeric" value="${x.kcal}"></div>
     <div><label class="lbl">Protein g</label><input id="f-p" type="number" inputmode="numeric" value="${x.p}"></div>
