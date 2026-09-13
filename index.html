@@ -590,12 +590,20 @@ function doneThisWeek(key){
 const PRIORITY=['A','C','B','cardio'];
 const dayIdx=d=>d===0?7:d;                      // Sunday closes the week
 function owed(){
-  const t=dayIdx(new Date().getDay());
-  return [1,2,4,6].filter(d=>dayIdx(d)<t&&!doneThisWeek(SCHEDULE[d])).map(d=>SCHEDULE[d]);
+  const t=dayIdx(new Date().getDay()), from=startedOn(), wk=weekDays().map(x=>x.key);
+  return [1,2,4,6]
+    .filter(d=>dayIdx(d)<t)
+    .filter(d=>!from||wk[dayIdx(d)-1]>=from)   // not owed for days before she started
+    .filter(d=>!doneThisWeek(SCHEDULE[d]))
+    .map(d=>SCHEDULE[d]);
 }
 function daysLeft(){return 8-dayIdx(new Date().getDay());}   // today included
 function weekPlan(){
-  const left=PRIORITY.filter(k=>!doneThisWeek(k)), room=daysLeft();
+  const t=dayIdx(new Date().getDay()), from=startedOn(), wk=weekDays().map(x=>x.key);
+  const missedBeforeStart=[1,2,4,6]
+    .filter(d=>dayIdx(d)<t&&from&&wk[dayIdx(d)-1]<from).map(d=>SCHEDULE[d]);
+  const left=PRIORITY.filter(k=>!doneThisWeek(k)&&!missedBeforeStart.includes(k));
+  const room=daysLeft();
   return{keep:left.slice(0,room),lost:left.slice(room)};
 }
 /* What the app tells her to do when she opens it. */
@@ -707,6 +715,16 @@ function vHome(){
   ${isMonday&&!weighedToday?`<div class="card warn between">
      <div><div class="lbl">Monday</div><div>On the scale. Before breakfast.</div></div>
      <button class="pri sm" data-tab="weight">Log</button></div>`:''}
+  ${(()=>{const j=todaysJob();
+     const label=j.key==='cardio'?'Cardio · '+LONG.home.min+' min'
+       :j.key?j.key+' · '+PROGRAM[j.key].name
+       :j.why==='done'?'Done for today':'Rest day';
+     const owed=j.why==='owed';
+     return `<div class="card between" data-tab="training" style="cursor:pointer">
+       <div><div class="lbl">${owed?'Owed · train today':j.key?'Train today':'Today'}</div>
+         <div style="font-size:17px;margin-top:2px">${label}</div></div>
+       <div class="dim" style="font-size:20px">${j.key?'›':''}</div>
+     </div>`;})()}
   <div class="card">
     <div class="lbl">Calories left today</div>
     <div class="big ${left<0?'bad':'sage'}">${left}</div>
@@ -734,9 +752,9 @@ function vHome(){
       <button class="sm" data-act="steps">${h.steps?'Edit':'Log'}</button>
     </div>
     ${ring(h.steps||0,STEP_GOAL)}
-    <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Minimum met.'
-      :(h.steps||0)===0?'Counts in from your phone through the day. Walk.'
-      :(STEP_GOAL-(h.steps||0))+' short. Walk.'}</div>
+    <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Floor cleared. Not a win, a minimum.'
+      :(h.steps||0)===0?'Nothing in yet. Move.'
+      :(STEP_GOAL-(h.steps||0))+' short. That is fat you chose to keep. Walk.'}</div>
   </div>
   <div class="card">
     <div class="between" style="padding:2px 0 11px">
@@ -861,10 +879,10 @@ function vTraining(){
   </div>`}
 
   ${(()=>{const lost=weekPlan().lost;return lost.length?`<div class="card" style="border-color:var(--bad)">
-    <div class="lbl bad">Gone this week</div>
+    <div class="lbl bad">You will not get these done</div>
     <div style="margin:3px 0 4px">${lost.map(k=>k==='cardio'?'Cardio':k+' · '+PROGRAM[k].name).join(', ')}</div>
-    <div class="note">${lost.length} session${lost.length>1?'s':''} outstanding and ${daysLeft()} day${daysLeft()>1?'s':''} left.
-      You do not stack them — one session a day. These are lost. Monday the count starts at zero.</div>
+    <div class="note">Only ${daysLeft()} day${daysLeft()>1?'s':''} left and one session a day. These do not
+      roll over to next week — they are simply not happening. You skipped them.</div>
   </div>`:'';})()}
 
   ${deloadDue()?`<div class="card warn">
