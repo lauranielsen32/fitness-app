@@ -1246,7 +1246,8 @@ async function act(name,arg,el){
   switch(name){
 
   case 'deloaddone':
-    S.training.deload=today(); save(); render(); toast('Logged. Next one in eight weeks.'); break;
+    S.training.deload=today(); save(); flash(el,'Logged ✓');
+    setTimeout(render,1400); break;
 
   case 'steps':{
     sheet(`<h2 style="margin-top:0">Steps today</h2>
@@ -1264,7 +1265,10 @@ async function act(name,arg,el){
 
   case 'habit':{
     const d=today(); S.habits[d]=S.habits[d]||{};
-    S.habits[d][arg]=!S.habits[d][arg]; save(); render(); break;}
+    S.habits[d][arg]=!S.habits[d][arg];
+    el.textContent=S.habits[d][arg]?'Done ✓':'Not yet';
+    el.className=S.habits[d][arg]?'sm pri':'sm';
+    save(); setTimeout(render,600); break;}
 
   case 'photo':{
     const inp=document.createElement('input');
@@ -1456,7 +1460,7 @@ async function act(name,arg,el){
   case 'clearbought': S.bought={}; save(); shopSheet(); break;
 
   case 'savepantry':
-    S.pantry=val('p-note'); save(); render(); toast('Saved'); break;
+    S.pantry=val('p-note'); save(); flash(el,'Saved ✓'); break;
 
   case 'saveprofile':{
     const p=P();
@@ -1464,7 +1468,7 @@ async function act(name,arg,el){
     p.start=parseFloat(val('s-s'))||p.start; p.began=val('s-b')||p.began;
     p.goal=parseFloat(val('s-g'))||p.goal; p.kcal=num('s-k')||p.kcal;
     p.protein=num('s-p')||p.protein; p.activity=parseFloat(val('s-act'))||p.activity;
-    save(); render(); toast('Saved'); break;}
+    save(); flash(el,'Saved ✓'); break;}
 
   case 'link': await link(); break;
   case 'pullnow':
@@ -1484,6 +1488,7 @@ async function act(name,arg,el){
 
   case 'saveai':{
     const k=val('ai-key').trim(); if(!k)return;
+    flash(el,'Checking…');
     localStorage.setItem(AI_KEY,k);
     localStorage.removeItem(AIMODEL_KEY); modelList=null;
     try{await aiModels(); toast('AI key works — '+aiModelName());}
@@ -1517,6 +1522,14 @@ async function act(name,arg,el){
 
   case 'closes': closeSheet(); break;
   }
+}
+/* Confirm where the thumb is, not 600 px away in the status bar. */
+function flash(el,text){
+  if(!el)return;
+  const label=el.textContent, cls=el.className;
+  el.textContent=text; el.className=cls.replace(/\bpri\b/,'')+' pri';
+  el.disabled=true;
+  setTimeout(function(){el.textContent=label;el.className=cls;el.disabled=false;},1400);
 }
 const val=id=>{const e=document.getElementById(id);return e?e.value:'';};
 const num=id=>{const v=parseFloat(val(id));return isNaN(v)?0:Math.round(v);};
