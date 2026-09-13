@@ -55,7 +55,8 @@ nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0b0d0c;
 nav button{flex:1;background:none;border:0;border-radius:0;padding:9px 2px 10px;
   font-size:10px;color:var(--dim);letter-spacing:.04em;display:flex;flex-direction:column;
   align-items:center;gap:4px}
-nav button.on{color:var(--sage)}
+nav button.on{color:#fff;font-weight:700}
+nav button.on svg{stroke-width:2.3}
 nav svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;
   stroke-linecap:round;stroke-linejoin:round}
 .top{position:sticky;top:0;background:linear-gradient(var(--bg) 70%,transparent);
@@ -124,7 +125,7 @@ const DEVICE=(function(){const u=navigator.userAgent;
 /* ══ 2. Data model ══════════════════════════════════════════════════ */
 function emptyS(){return{
   meta:{at:0,dev:'',v:2},
-  profile:{height:170,age:28,sex:'f',start:87,goal:75,kcal:1800,protein:135,activity:1.375},
+  profile:{height:170,age:28,sex:'f',start:87,goal:75,kcal:1800,protein:135,activity:1.375,began:''},
   weights:[],                 // [{d:'2026-09-14',kg:86}]
   food:{},                    // {'2026-09-12':[{id,name,kcal,p,c,f,photo,t}]}
   meals:[],                   // [{id,name,kcal,p,ing:[{n,q,u,s}]}]
@@ -429,6 +430,7 @@ function dayKcal(d){return (S.food[d]||[]).reduce((a,x)=>a+(+x.kcal||0),0);}
 /* Nothing counts before the first day she actually used the app. No
    judging days she was not here for. */
 function startedOn(){
+  if(P().began)return P().began;          // set by hand in Settings, wins over everything
   const all=[].concat(
     S.weights.map(w=>w.d),
     Object.keys(S.food).filter(d=>(S.food[d]||[]).length),
@@ -450,10 +452,12 @@ function weekStats(){
          stepDays:stepDays,stepDaysCounted:stepDaysCounted,weighed:weighed,daysIn:past.length};
 }
 function stepStreakUnder(){
+  const from=startedOn(); if(!from)return 0;
   let n=0;
   for(let i=1;i<=7;i++){
     const d=new Date(); d.setDate(d.getDate()-i);
     const k=d.toISOString().slice(0,10);
+    if(k<from)break;                       // days before she started do not count
     if(!S.habits[k])break;
     if(daySteps(k)<STEP_GOAL)n++; else break;
   }
@@ -730,17 +734,20 @@ function vHome(){
       <button class="sm" data-act="steps">${h.steps?'Edit':'Log'}</button>
     </div>
     ${ring(h.steps||0,STEP_GOAL)}
-    <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Done. That was the minimum, not the win.'
-      :(h.steps||0)===0?'Your phone reports in a few times a day, last one before midnight. A zero this early means nothing yet — walk.'
-      :'Steps move more of the deficit than any cardio session. They drop without you noticing when you eat less. Get out and walk.'}</div>
+    <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Minimum met.'
+      :(h.steps||0)===0?'Counts in from your phone through the day. Walk.'
+      :(STEP_GOAL-(h.steps||0))+' short. Walk.'}</div>
   </div>
   <div class="card">
-    <div class="between" style="padding:2px 0 10px">
-      <div><span>Sauna</span><div class="st">After the weights or on a rest day. Never before.</div></div>
-      <button class="sm ${h.sauna?'pri':''}" data-act="habit" data-arg="sauna">${h.sauna?'Done':'Mark'}</button></div>
+    <div class="between" style="padding:2px 0 11px">
+      <div><div class="lbl">Sauna today</div>
+        <div class="st">${h.sauna?'Ticked off.':'Tick it when you have been. After lifting or on a rest day.'}</div></div>
+      <button class="sm ${h.sauna?'pri':''}" data-act="habit" data-arg="sauna">${h.sauna?'Done ✓':'Not yet'}</button></div>
     <div class="between" style="border-top:1px solid var(--line);padding-top:11px">
-      <span class="dim">${lastTr?'Last: '+(lastTr.key==='cardio'?'':lastTr.key+' · ')+lastTr.name+' · '+lastTr.d:'No training logged yet'}</span>
-      <button class="sm" data-tab="training">Train</button></div>
+      <div><div class="lbl">Last session</div>
+        <div class="st">${lastTr?(lastTr.key==='cardio'?'Cardio':lastTr.key+' · '+lastTr.name)+' · '+lastTr.d
+          :'None yet'}</div></div>
+      <button class="sm" data-tab="training">Open training</button></div>
   </div>
   <h2>This week</h2>
   ${(()=>{const w=weekStats(),lost=daysLost();return `
@@ -972,6 +979,7 @@ function vSettings(){
       <div><label class="lbl">Height cm</label><input type="number" id="s-h" value="${p.height}"></div>
       <div><label class="lbl">Age</label><input type="number" id="s-a" value="${p.age}"></div>
       <div><label class="lbl">Start kg</label><input type="number" id="s-s" step="0.1" value="${p.start}"></div>
+      <div><label class="lbl">Started on</label><input type="date" id="s-b" value="${p.began||today()}"></div>
       <div><label class="lbl">Goal kg</label><input type="number" id="s-g" step="0.1" value="${p.goal}"></div>
       <div><label class="lbl">Calories</label><input type="number" id="s-k" value="${p.kcal}"></div>
       <div><label class="lbl">Protein g</label><input type="number" id="s-p" value="${p.protein}"></div>
@@ -1222,7 +1230,7 @@ async function act(name,arg,el){
   case 'saveprofile':{
     const p=P();
     p.height=num('s-h')||p.height; p.age=num('s-a')||p.age;
-    p.start=parseFloat(val('s-s'))||p.start;
+    p.start=parseFloat(val('s-s'))||p.start; p.began=val('s-b')||p.began;
     p.goal=parseFloat(val('s-g'))||p.goal; p.kcal=num('s-k')||p.kcal;
     p.protein=num('s-p')||p.protein; p.activity=parseFloat(val('s-act'))||p.activity;
     save(); render(); toast('Saved'); break;}
