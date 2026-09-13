@@ -425,6 +425,45 @@ async function aiText(desc){
   throw new Error('All models failed — '+last);
 }
 
+/* The back of the pack beats any estimate. Read the panel once and the
+   product lands in her own history with the real numbers — after that it
+   is one tap in search, forever. */
+async function aiLabel(b64){
+  if(!aiKey())throw new Error('No AI key — add one in Settings.');
+  const models=await aiModels();
+  const body=JSON.stringify({
+    contents:[{parts:[
+      {text:'This photo shows the nutrition panel on a food package. Read the numbers, '+
+            'do not estimate them. Reply with JSON only: '+
+            '{"name":string,"basis":number,"kcal":number,"protein":number,"carbs":number,"fat":number}. '+
+            'basis is the weight in grams the panel is stated per — normally 100. '+
+            'If the panel is only per serving, set basis to that serving weight in grams. '+
+            'name is the product, short. If you cannot read the panel, set kcal to 0.'},
+      {inline_data:{mime_type:'image/jpeg',data:b64}}]}],
+    generationConfig:{responseMimeType:'application/json',temperature:0}});
+  let last='';
+  for(let i=0;i<models.length;i++){
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[i]+':generateContent',
+      {method:'POST',headers:{'content-type':'application/json','x-goog-api-key':aiKey()},body:body});
+    if(r.ok){
+      const j=await r.json();
+      const txt=j.candidates?.[0]?.content?.parts?.[0]?.text||'';
+      let o; try{o=JSON.parse(txt);}catch(e){last='model returned no usable JSON';continue;}
+      if(i>0){modelList=[models[i]].concat(models.filter((m,k)=>k!==i));
+        localStorage.setItem(AIMODEL_KEY,JSON.stringify(modelList));}
+      const basis=Math.round(+o.basis||100);
+      if(!(+o.kcal))throw new Error('Could not read the panel. Get closer and keep it flat.');
+      return{n:String(o.name||'Product'),port:basis+' g',
+        kcal:Math.round(+o.kcal||0),p:Math.round(+o.protein||0),
+        c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
+    }
+    let msg=''; try{msg=(await r.json()).error?.message||'';}catch(e){}
+    last=r.status+(msg?': '+msg.slice(0,90):'');
+    if(r.status===400||r.status===401||r.status===403)throw new Error('AI error '+last);
+  }
+  throw new Error('All models failed — '+last);
+}
+
 /* photo -> downscaled jpeg base64 */
 function shrink(file,max,q){
   return new Promise(function(res,rej){
@@ -937,7 +976,10 @@ function vFood(){
     <button class="pri" data-act="photo">Photo</button>
     <button class="pri" data-act="describe">Describe it</button>
   </div>
-  <button class="wide ghost sm" data-act="manual" style="margin-top:8px">Type the numbers myself</button>
+  <div class="grid2" style="margin-top:8px">
+    <button data-act="label">Scan a label</button>
+    <button class="ghost" data-act="manual">Type it myself</button>
+  </div>
   <h2>Today</h2>
   <div class="card">
     ${list.length?list.map(x=>`
@@ -1265,6 +1307,21 @@ async function act(name,arg,el){
     inp.click(); break;}
 
   case 'manual': foodSheet({name:'',kcal:'',p:'',c:'',f:''}); break;
+
+  case 'label':{
+    const inp=document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+    inp.onchange=async function(){
+      const f=inp.files[0]; if(!f)return;
+      sheet('<div class="note">Reading the label…</div>');
+      try{
+        const big=await shrink(f,1100,.8);
+        const item=await aiLabel(strip(big));
+        hits=[item];               // slot it in so the amount sheet can scale it
+        quickSheet(item);
+      }catch(e){ closeSheet(); toast(e.message,true); }
+    };
+    inp.click(); break;}
 
   case 'describe':{
     sheet(`<h2 style="margin-top:0">What did you eat?</h2>
