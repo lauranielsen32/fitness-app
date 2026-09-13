@@ -509,6 +509,89 @@ function nextDumbbell(w){
   return i<0?DB_STEPS[DB_STEPS.length-1]:DB_STEPS[i];
 }
 
+/* The things that are too small to bother typing in by hand, which is
+   exactly why they never get logged. One tap each. Numbers are per the
+   portion named, rounded — good enough for a daily total. Her own log
+   is searched first, so whatever she actually eats rises to the top. */
+const FOODS=[
+ {n:'Coffee, black',        port:'1 cup',    kcal:2,   p:0,  c:0,  f:0},
+ {n:'Coffee with milk',     port:'1 cup',    kcal:25,  p:1,  c:2,  f:1},
+ {n:'Latte',                port:'medium',   kcal:120, p:7,  c:11, f:5},
+ {n:'Cappuccino',           port:'medium',   kcal:80,  p:5,  c:7,  f:4},
+ {n:'Tea',                  port:'1 cup',    kcal:2,   p:0,  c:0,  f:0},
+ {n:'Pepsi Max / Coke Zero',port:'330 ml',   kcal:1,   p:0,  c:0,  f:0},
+ {n:'Cola, regular',        port:'330 ml',   kcal:139, p:0,  c:35, f:0},
+ {n:'Beer',                 port:'330 ml',   kcal:140, p:1,  c:11, f:0},
+ {n:'Wine, red or white',   port:'150 ml',   kcal:125, p:0,  c:4,  f:0},
+ {n:'Milk, semi-skimmed',   port:'200 ml',   kcal:100, p:7,  c:10, f:3},
+ {n:'Oat milk',             port:'200 ml',   kcal:90,  p:2,  c:14, f:3},
+ {n:'Orange juice',         port:'200 ml',   kcal:90,  p:1,  c:21, f:0},
+ {n:'Apple',                port:'1 medium', kcal:80,  p:0,  c:19, f:0},
+ {n:'Banana',               port:'1 medium', kcal:105, p:1,  c:27, f:0},
+ {n:'Orange',               port:'1 medium', kcal:60,  p:1,  c:15, f:0},
+ {n:'Grapes',               port:'100 g',    kcal:69,  p:1,  c:18, f:0},
+ {n:'Blueberries',          port:'100 g',    kcal:57,  p:1,  c:14, f:0},
+ {n:'Strawberries',         port:'100 g',    kcal:33,  p:1,  c:8,  f:0},
+ {n:'Carrot',               port:'1 medium', kcal:25,  p:1,  c:6,  f:0},
+ {n:'Cucumber',             port:'100 g',    kcal:15,  p:1,  c:4,  f:0},
+ {n:'Tomato',               port:'1 medium', kcal:22,  p:1,  c:5,  f:0},
+ {n:'Avocado',              port:'half',     kcal:160, p:2,  c:9,  f:15},
+ {n:'Egg, boiled',          port:'1 egg',    kcal:78,  p:6,  c:1,  f:5},
+ {n:'Skyr, plain',          port:'150 g',    kcal:90,  p:17, c:6,  f:0},
+ {n:'Greek yoghurt',        port:'150 g',    kcal:145, p:15, c:6,  f:7},
+ {n:'Cottage cheese',       port:'100 g',    kcal:98,  p:11, c:3,  f:4},
+ {n:'Cheese slice',         port:'1 slice',  kcal:70,  p:5,  c:0,  f:6},
+ {n:'Rye bread',            port:'1 slice',  kcal:85,  p:3,  c:16, f:1},
+ {n:'White bread',          port:'1 slice',  kcal:80,  p:3,  c:15, f:1},
+ {n:'Crispbread',           port:'1 piece',  kcal:35,  p:1,  c:7,  f:0},
+ {n:'Oats, dry',            port:'50 g',     kcal:190, p:7,  c:33, f:4},
+ {n:'Rice, cooked',         port:'150 g',    kcal:195, p:4,  c:43, f:0},
+ {n:'Pasta, cooked',        port:'150 g',    kcal:220, p:8,  c:43, f:1},
+ {n:'Potatoes, boiled',     port:'200 g',    kcal:170, p:4,  c:39, f:0},
+ {n:'Chicken breast',       port:'150 g',    kcal:250, p:47, c:0,  f:5},
+ {n:'Salmon',               port:'150 g',    kcal:310, p:34, c:0,  f:19},
+ {n:'Tuna, canned in water',port:'1 tin',    kcal:110, p:25, c:0,  f:1},
+ {n:'Minced beef 5%',       port:'150 g',    kcal:200, p:31, c:0,  f:8},
+ {n:'Protein shake',        port:'1 scoop',  kcal:120, p:24, c:3,  f:2},
+ {n:'Protein bar',          port:'1 bar',    kcal:200, p:20, c:20, f:6},
+ {n:'Peanut butter',        port:'1 tbsp',   kcal:95,  p:4,  c:3,  f:8},
+ {n:'Almonds',              port:'25 g',     kcal:145, p:5,  c:5,  f:13},
+ {n:'Olive oil',            port:'1 tbsp',   kcal:120, p:0,  c:0,  f:14},
+ {n:'Butter',               port:'1 tsp',    kcal:35,  p:0,  c:0,  f:4},
+ {n:'Mayonnaise',           port:'1 tbsp',   kcal:95,  p:0,  c:0,  f:10},
+ {n:'Ketchup',              port:'1 tbsp',   kcal:20,  p:0,  c:5,  f:0},
+ {n:'Dark chocolate',       port:'20 g',     kcal:110, p:1,  c:9,  f:8},
+ {n:'Milk chocolate',       port:'20 g',     kcal:105, p:1,  c:12, f:6},
+ {n:'Crisps',               port:'30 g',     kcal:160, p:2,  c:15, f:10},
+ {n:'Liquorice / sweets',   port:'30 g',     kcal:105, p:1,  c:25, f:0},
+ {n:'Ice cream',            port:'100 ml',   kcal:130, p:2,  c:15, f:7},
+ {n:'Croissant',            port:'1',        kcal:230, p:5,  c:26, f:12},
+ {n:'Danish pastry',        port:'1',        kcal:330, p:5,  c:40, f:17},
+ {n:'Slice of cake',        port:'1 slice',  kcal:350, p:4,  c:48, f:16},
+ {n:'Pizza slice',          port:'1 slice',  kcal:285, p:12, c:36, f:10},
+ {n:'Burger, takeaway',     port:'1',        kcal:500, p:25, c:42, f:26},
+ {n:'Sushi',                port:'8 pieces', kcal:350, p:15, c:60, f:5},
+ {n:'Salad with dressing',  port:'1 bowl',   kcal:250, p:6,  c:15, f:18}
+];
+/* Her own log first: whatever she actually eats becomes the shortlist. */
+function foodHistory(){
+  const seen={}, out=[];
+  Object.keys(S.food).sort().reverse().forEach(d=>{
+    (S.food[d]||[]).forEach(x=>{
+      const k=x.name.toLowerCase();
+      if(seen[k])return; seen[k]=1;
+      out.push({n:x.name,port:'as logged',kcal:x.kcal,p:x.p,c:x.c,f:x.f,mine:1});
+    });
+  });
+  return out;
+}
+function searchFood(q){
+  q=q.trim().toLowerCase();
+  if(!q)return [];
+  const hit=x=>x.n.toLowerCase().includes(q);
+  return foodHistory().filter(hit).concat(FOODS.filter(hit)).slice(0,10);
+}
+
 /* ══ 9. Programme ═══════════════════════════════════════════════════
    Three full-body sessions in fixed rotation A → B → C, plus one
    conditioning day. Full body so a missed day never drops a muscle
@@ -690,7 +773,7 @@ function render(){
   v.innerHTML=({home:vHome,food:vFood,training:vTraining,plan:vPlan,weight:vWeight,
                 settings:vSettings})[tab]();
   status();
-  if(tab==='food')paintThumbs();
+  if(tab==='food'){paintThumbs();wireSearch();}
 }
 document.addEventListener('click',function(e){
   const b=e.target.closest('[data-tab]');    if(b)return go(b.dataset.tab);
@@ -797,6 +880,11 @@ function vFood(){
     <div><div class="lbl">Eaten</div><div class="mid">${e.kcal} <span class="dim" style="font-size:13px">kcal</span></div></div>
     <div><div class="lbl">Protein</div><div class="mid">${e.p} <span class="dim" style="font-size:13px">g</span></div></div>
   </div>
+  <div class="card" style="padding:10px 12px">
+    <input id="q" placeholder="Quick add — coffee, apple, skyr…" autocapitalize="off"
+      autocorrect="off" spellcheck="false" style="margin:0">
+    <div id="hits"></div>
+  </div>
   <div class="grid2">
     <button class="pri" data-act="photo">Photo + AI</button>
     <button data-act="manual">Add by hand</button>
@@ -815,6 +903,23 @@ function vFood(){
   </div>
   ${!aiKey()?'<div class="note" style="margin-top:10px">Add a free Gemini key in Settings to use photo logging.</div>':''}`;
 }
+let hits=[];
+function wireSearch(){
+  const q=document.getElementById('q'), box=document.getElementById('hits');
+  if(!q)return;
+  q.oninput=function(){
+    hits=searchFood(q.value);
+    box.innerHTML=hits.length?hits.map((x,i)=>`
+      <button class="wide" data-act="quick" data-arg="${i}"
+        style="text-align:left;margin-top:6px;padding:9px 11px">
+        <div class="between"><span style="min-width:0">${esc(x.n)}${x.mine?' <span class="tag">yours</span>':''}</span>
+          <span class="dim" style="font-size:13px;white-space:nowrap">${x.kcal} kcal</span></div>
+        <div class="st">${esc(x.port)} · ${x.p}P ${x.c}C ${x.f}F</div>
+      </button>`).join('')
+      :(q.value.trim()?'<div class="note" style="margin-top:8px">Nothing matches. Use Add by hand.</div>':'');
+  };
+}
+
 async function paintThumbs(){
   for(const img of document.querySelectorAll('[data-photo]')){
     const src=await getPhoto(img.dataset.photo);
@@ -1111,6 +1216,14 @@ async function act(name,arg,el){
     inp.click(); break;}
 
   case 'manual': foodSheet({name:'',kcal:'',p:'',c:'',f:''}); break;
+
+  case 'quick':{
+    const x=hits[+arg]; if(!x)return;
+    const d=today();
+    S.food[d]=S.food[d]||[];
+    S.food[d].push({id:Date.now(),t:Date.now(),name:x.n,kcal:x.kcal,p:x.p,c:x.c,f:x.f});
+    hits=[]; save(); render();
+    toast(x.n+' · '+x.kcal+' kcal'); break;}
 
   case 'edit':{
     const d=today(), x=(S.food[d]||[]).find(y=>String(y.id)===String(arg));
