@@ -404,14 +404,16 @@ async function aiFood(b64){
    red it has never heard of it and you should add the number yourself. */
 function pantryList(){
   const v=S.pantry;
-  const norm=x=>typeof x==='string'?{t:x.trim(),conf:''}:{t:String(x&&x.t||'').trim(),conf:x&&x.conf||''};
+  const norm=x=>typeof x==='string'?{t:x.trim(),conf:''}
+    :{t:String(x&&x.t||'').trim(),conf:x&&x.conf||'',reading:x&&x.reading||0};
   if(Array.isArray(v))return v.map(norm).filter(x=>x.t);
   return String(v||'').split('\n').map(t=>({t:t.trim(),conf:''})).filter(x=>x.t);
 }
 function pantryNote(){
   const l=pantryList();
-  return l.length?' The person eats these specific products — use them, not standard versions: '+
-    l.map(x=>x.t.replace(/[.\s]+$/,'')).join('. ')+'.':'';
+  const real=l.filter(x=>!x.reading);
+  return real.length?' The person eats these specific products — use them, not standard versions: '+
+    real.map(x=>x.t.replace(/[.\s]+$/,'')).join('. ')+'.':'';
 }
 const CONF={high:'#5e9c6a',medium:'#c9a227',low:'#c05555','':'#3a403c'};
 const CONF_TEXT={high:'Known product',medium:'Brand known, numbers estimated',
@@ -1062,7 +1064,7 @@ function wirePantry(){
     };
   });
   const n=document.getElementById('p-new');
-  if(n)n.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();act('addpantry');}};
+  if(n)n.onkeydown=function(e){if(e.key==='Enter')e.preventDefault();};   // the buttons decide, not the keyboard
 }
 
 let hits=[];
@@ -1321,10 +1323,10 @@ function vSettings(){
           <button data-act="recheck" data-arg="${i}" title="Check again"
             style="flex:none;padding:10px 6px;background:none;border:0">
             <span class="dot" style="background:${CONF[x.conf]}"></span></button>
-          <input class="pitem" data-i="${i}" value="${esc(x.t)}" style="margin:0">
-          ${x.conf!=='high'?`<button class="sm" data-act="scanpantry" data-arg="${i}"
+          <input class="pitem" data-i="${i}" value="${esc(x.t)}" style="margin:0" ${x.reading?'disabled':''}>
+          ${x.reading?'':`${x.conf!=='high'?`<button class="sm" data-act="scanpantry" data-arg="${i}"
             title="Photograph the label" style="flex:none">📷</button>`:''}
-          <button class="sm" data-act="delpantry" data-arg="${i}" style="flex:none">✕</button>
+          <button class="sm" data-act="delpantry" data-arg="${i}" style="flex:none">✕</button>`}
         </div>
         <div class="st" style="margin:3px 0 0 15px">${CONF_TEXT[x.conf]}</div>
       </div>`).join(''):'<div class="note" style="margin-bottom:10px">Nothing yet.</div>'}
@@ -1601,17 +1603,31 @@ async function act(name,arg,el){
     inp.type='file'; inp.accept='image/*'; inp.capture='environment';
     inp.onchange=async function(){
       const f=inp.files[0]; if(!f)return;
-      toast('Reading the label…');
+      const l0=pantryList();
+      if(isNew)l0.push({t:(cur.t||'New product')+' — reading the label…',conf:'',reading:1});
+      else if(l0[i])l0[i]=Object.assign({},l0[i],{reading:1,t:l0[i].t+' — reading the label…'});
+      S.pantry=l0; render();
       try{
         const big=await shrink(f,1100,.8);
         const o=await aiLabel(strip(big));
-        const line={t:(cur.t||o.name||'Product')+' — '+o.kcal+' kcal, '+o.p+' g protein, '+
+        const name=cur.t||o.name||'Product';
+        const line={t:name+' — '+o.kcal+' kcal, '+o.p+' g protein, '+
                       o.c+' g carbs, '+o.f+' g fat per '+o.basis+' g', conf:'high'};
-        const l=pantryList();
-        if(isNew)l.push(line); else if(l[i])l[i]=line; else return;
+        const l=pantryList().filter(x=>!x.reading);
+        if(isNew){
+          /* she may have hit Add first — do not leave two lines for one product */
+          const key=name.toLowerCase().slice(0,14);
+          const dup=l.findIndex(x=>x.t.toLowerCase().startsWith(key));
+          if(dup>=0)l[dup]=line; else l.push(line);
+        }else if(l[i]){l[i]=line;}else{l.push(line);}
         S.pantry=l; save(); render();
         toast('Read from the pack. Nothing to guess on this one now.');
-      }catch(e){ toast(e.message,true); }
+      }catch(e){
+        S.pantry=pantryList().filter(x=>!x.reading)
+          .concat(isNew?[]:[]);                      // drop the placeholder again
+        if(!isNew){const back=pantryList(); if(back[i])back[i].t=cur.t; S.pantry=back;}
+        save(); render(); toast(e.message,true);
+      }
     };
     inp.click(); break;}
 
