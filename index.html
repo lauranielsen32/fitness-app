@@ -490,6 +490,40 @@ async function aiText(desc){
   throw new Error('All models failed — '+last);
 }
 
+/* For a line the model only half knows: photograph the panel once and
+   the real numbers go into the line itself. Nothing left to guess. */
+async function aiLabel(b64){
+  if(!aiKey())throw new Error('No AI key — add one in Settings.');
+  const models=await aiModels();
+  const body=JSON.stringify({
+    contents:[{parts:[
+      {text:'This photo shows the nutrition panel on a food package. Read the printed numbers, '+
+            'do not estimate. Reply JSON only: {"name":string,"basis":number,"kcal":number,'+
+            '"protein":number,"carbs":number,"fat":number}. basis is the weight in grams the panel '+
+            'is stated per, normally 100. name is the product, short. '+
+            'If you cannot read the panel, set kcal to 0.'},
+      {inline_data:{mime_type:'image/jpeg',data:b64}}]}],
+    generationConfig:{responseMimeType:'application/json',temperature:0}});
+  let last='';
+  for(let i=0;i<models.length;i++){
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[i]+':generateContent',
+      {method:'POST',headers:{'content-type':'application/json','x-goog-api-key':aiKey()},body:body});
+    if(r.ok){
+      const j=await r.json();
+      let o; try{o=JSON.parse(j.candidates?.[0]?.content?.parts?.[0]?.text||'');}
+      catch(e){last='model returned no usable JSON';continue;}
+      if(!(+o.kcal))throw new Error('Could not read the panel. Hold it flat and fill the frame.');
+      return{name:String(o.name||'').trim(),basis:Math.round(+o.basis||100),
+        kcal:Math.round(+o.kcal),p:Math.round(+o.protein||0),
+        c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
+    }
+    let msg=''; try{msg=(await r.json()).error?.message||'';}catch(e){}
+    last=r.status+(msg?': '+msg.slice(0,90):'');
+    if(r.status===400||r.status===401||r.status===403)throw new Error('AI error '+last);
+  }
+  throw new Error('All models failed — '+last);
+}
+
 /* photo -> downscaled jpeg base64 */
 function shrink(file,max,q){
   return new Promise(function(res,rej){
@@ -1288,19 +1322,26 @@ function vSettings(){
             style="flex:none;padding:10px 6px;background:none;border:0">
             <span class="dot" style="background:${CONF[x.conf]}"></span></button>
           <input class="pitem" data-i="${i}" value="${esc(x.t)}" style="margin:0">
+          ${x.conf!=='high'?`<button class="sm" data-act="scanpantry" data-arg="${i}"
+            title="Photograph the label" style="flex:none">📷</button>`:''}
           <button class="sm" data-act="delpantry" data-arg="${i}" style="flex:none">✕</button>
         </div>
         <div class="st" style="margin:3px 0 0 15px">${CONF_TEXT[x.conf]}</div>
       </div>`).join(''):'<div class="note" style="margin-bottom:10px">Nothing yet.</div>'}
     <div class="row" style="gap:8px;margin-top:10px">
-      <input id="p-new" placeholder="Granola is sugar-free" style="margin:0">
-      <button class="sm pri" data-act="addpantry" style="flex:none">Add</button>
+      <input id="p-new" placeholder="Cheasy yoghurt sugar free" style="margin:0">
+      <button class="sm" data-act="addpantry" style="flex:none">Add</button>
+      <button class="sm pri" data-act="scanpantry" data-arg="new" style="flex:none">📷 Label</button>
     </div>
-    <div class="note" style="margin-top:10px">One line per product, sent with every photo.
+    <div class="note" style="margin-top:10px">Type the product name and hit <b>📷 Label</b> to photograph
+      the panel on the pack — the numbers write themselves in and that product is settled for good.
+      <b>Add</b> without a photo works too, and then the dot tells you how much the AI is guessing.<br><br>
+      One line per product, sent with every food photo.
       <span style="color:#5e9c6a">Green</span> means the AI has the real numbers.
       <span style="color:#c9a227">Amber</span> means it is estimating —
       <span style="color:#c05555">red</span> means it has no idea. For those two, write the number from the
-      pack into the line: <i>Cheasy yoghurt, 38 kcal per 100 g</i>.</div>
+      pack into the line — or hit 📷 and photograph the panel, and the numbers write themselves in.
+      Tap a dot to check a line again.</div>
   </div>
 
   <h2>Backup</h2>
@@ -1551,6 +1592,28 @@ async function act(name,arg,el){
     break;}
 
   case 'recheck': checkPantry(+arg); toast('Checking…'); break;
+
+  case 'scanpantry':{
+    const isNew=arg==='new';
+    const i=isNew?-1:+arg, cur=isNew?{t:val('p-new').trim()}:pantryList()[i];
+    if(!cur)return;
+    const inp=document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+    inp.onchange=async function(){
+      const f=inp.files[0]; if(!f)return;
+      toast('Reading the label…');
+      try{
+        const big=await shrink(f,1100,.8);
+        const o=await aiLabel(strip(big));
+        const line={t:(cur.t||o.name||'Product')+' — '+o.kcal+' kcal, '+o.p+' g protein, '+
+                      o.c+' g carbs, '+o.f+' g fat per '+o.basis+' g', conf:'high'};
+        const l=pantryList();
+        if(isNew)l.push(line); else if(l[i])l[i]=line; else return;
+        S.pantry=l; save(); render();
+        toast('Read from the pack. Nothing to guess on this one now.');
+      }catch(e){ toast(e.message,true); }
+    };
+    inp.click(); break;}
 
   case 'delpantry':{
     const l=pantryList(); l.splice(+arg,1); S.pantry=l;
