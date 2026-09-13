@@ -126,6 +126,7 @@ const DEVICE=(function(){const u=navigator.userAgent;
 function emptyS(){return{
   meta:{at:0,dev:'',v:2},
   profile:{height:170,age:28,sex:'f',start:87,goal:75,kcal:1800,protein:135,activity:1.375,began:''},
+  pantry:'',                  // the products she actually buys, fed to the AI every time
   weights:[],                 // [{d:'2026-09-14',kg:86}]
   food:{},                    // {'2026-09-12':[{id,name,kcal,p,c,f,photo,t}]}
   meals:[],                   // [{id,name,kcal,p,ing:[{n,q,u,s}]}]
@@ -299,6 +300,7 @@ document.addEventListener('visibilitychange',function(){
 });
 function merge(d){const base=emptyS();
   const out=Object.assign(base,d||{});
+  out.pantry=(d&&d.pantry)||'';
   out.profile=Object.assign(base.profile,d&&d.profile||{});
   out.training=Object.assign(base.training,d&&d.training||{});
   return out;}
@@ -364,7 +366,8 @@ async function aiFood(b64){
             'Judge the weight from anything of known size in the frame — cutlery, a hand, the plate rim. '+
             'Reply with JSON only: {"name":string,"grams":number,"kcal":number,"protein":number,'+
             '"carbs":number,"fat":number}. grams is the total served weight. '+
-            'Grams for protein/carbs/fat. Count oil, butter and sauce. Be realistic, not optimistic.'},
+            'Grams for protein/carbs/fat. Count oil, butter and sauce.'+pantryNote()+
+               ' Be realistic, not optimistic.'},
       {inline_data:{mime_type:'image/jpeg',data:b64}}]}],
     generationConfig:{responseMimeType:'application/json',temperature:0.2}});
   let last='';
@@ -392,16 +395,24 @@ async function aiFood(b64){
   throw new Error('All models failed — '+last);
 }
 /* Same model, no photo: she writes what she ate and it fills the numbers. */
+/* Her own products beat the AI's idea of an average supermarket.
+   Written once in Settings, sent with every photo and description. */
+function pantryNote(){
+  const t=(S.pantry||'').trim();
+  return t?' The person eats these specific products — use them, not standard versions: '+
+    t.replace(/[.\s]+$/,'')+'.':'';
+}
 async function aiText(desc){
   if(!aiKey())throw new Error('No AI key — add one in Settings.');
   const models=await aiModels();
   const body=JSON.stringify({
     contents:[{parts:[{text:
-      'A person logging food wrote: "'+desc+'". Work out the nutrition for exactly that. '+
+      'A person logging food wrote: "'+desc+'". Work out the nutrition for exactly that.'+
+      pantryNote()+' '+
       'Reply with JSON only: {"name":string,"grams":number,"kcal":number,"protein":number,'+
       '"carbs":number,"fat":number}. name is a short tidy version of what they wrote. '+
       'grams is the total served weight. Grams for protein/carbs/fat. '+
-      'Assume normal supermarket products and count oil, butter and sauce. '+
+      'Count oil, butter and sauce. '+
       'Be realistic, not optimistic.'}]}],
     generationConfig:{responseMimeType:'application/json',temperature:0.2}});
   let last='';
@@ -415,45 +426,6 @@ async function aiText(desc){
       if(i>0){modelList=[models[i]].concat(models.filter((m,k)=>k!==i));
         localStorage.setItem(AIMODEL_KEY,JSON.stringify(modelList));}
       return{name:String(o.name||desc),port:o.grams?Math.round(+o.grams)+' g':'',
-        kcal:Math.round(+o.kcal||0),p:Math.round(+o.protein||0),
-        c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
-    }
-    let msg=''; try{msg=(await r.json()).error?.message||'';}catch(e){}
-    last=r.status+(msg?': '+msg.slice(0,90):'');
-    if(r.status===400||r.status===401||r.status===403)throw new Error('AI error '+last);
-  }
-  throw new Error('All models failed — '+last);
-}
-
-/* The back of the pack beats any estimate. Read the panel once and the
-   product lands in her own history with the real numbers — after that it
-   is one tap in search, forever. */
-async function aiLabel(b64){
-  if(!aiKey())throw new Error('No AI key — add one in Settings.');
-  const models=await aiModels();
-  const body=JSON.stringify({
-    contents:[{parts:[
-      {text:'This photo shows the nutrition panel on a food package. Read the numbers, '+
-            'do not estimate them. Reply with JSON only: '+
-            '{"name":string,"basis":number,"kcal":number,"protein":number,"carbs":number,"fat":number}. '+
-            'basis is the weight in grams the panel is stated per — normally 100. '+
-            'If the panel is only per serving, set basis to that serving weight in grams. '+
-            'name is the product, short. If you cannot read the panel, set kcal to 0.'},
-      {inline_data:{mime_type:'image/jpeg',data:b64}}]}],
-    generationConfig:{responseMimeType:'application/json',temperature:0}});
-  let last='';
-  for(let i=0;i<models.length;i++){
-    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[i]+':generateContent',
-      {method:'POST',headers:{'content-type':'application/json','x-goog-api-key':aiKey()},body:body});
-    if(r.ok){
-      const j=await r.json();
-      const txt=j.candidates?.[0]?.content?.parts?.[0]?.text||'';
-      let o; try{o=JSON.parse(txt);}catch(e){last='model returned no usable JSON';continue;}
-      if(i>0){modelList=[models[i]].concat(models.filter((m,k)=>k!==i));
-        localStorage.setItem(AIMODEL_KEY,JSON.stringify(modelList));}
-      const basis=Math.round(+o.basis||100);
-      if(!(+o.kcal))throw new Error('Could not read the panel. Get closer and keep it flat.');
-      return{n:String(o.name||'Product'),port:basis+' g',
         kcal:Math.round(+o.kcal||0),p:Math.round(+o.protein||0),
         c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
     }
@@ -976,10 +948,7 @@ function vFood(){
     <button class="pri" data-act="photo">Photo</button>
     <button class="pri" data-act="describe">Describe it</button>
   </div>
-  <div class="grid2" style="margin-top:8px">
-    <button data-act="label">Scan a label</button>
-    <button class="ghost" data-act="manual">Type it myself</button>
-  </div>
+  <button class="wide ghost sm" data-act="manual" style="margin-top:8px">Type it myself</button>
   <h2>Today</h2>
   <div class="card">
     ${list.length?list.map(x=>`
@@ -1242,6 +1211,14 @@ function vSettings(){
     </div>
   </div>
 
+  <h2>What you actually buy</h2>
+  <div class="card">
+    <textarea id="p-note" rows="4" placeholder="Granola is sugar-free. Yoghurt is 0.1% skyr. Zero-sugar ketchup and light dressing. Sweetener, never sugar, in coffee.">${esc(S.pantry||'')}</textarea>
+    <button class="pri wide" data-act="savepantry">Save</button>
+    <div class="note" style="margin-top:10px">Written once. Sent with every photo and description, so the
+      AI stops pricing the standard supermarket version of what you eat.</div>
+  </div>
+
   <h2>Backup</h2>
   <div class="card">
     <div class="grid2">
@@ -1307,21 +1284,6 @@ async function act(name,arg,el){
     inp.click(); break;}
 
   case 'manual': foodSheet({name:'',kcal:'',p:'',c:'',f:''}); break;
-
-  case 'label':{
-    const inp=document.createElement('input');
-    inp.type='file'; inp.accept='image/*'; inp.capture='environment';
-    inp.onchange=async function(){
-      const f=inp.files[0]; if(!f)return;
-      sheet('<div class="note">Reading the label…</div>');
-      try{
-        const big=await shrink(f,1100,.8);
-        const item=await aiLabel(strip(big));
-        hits=[item];               // slot it in so the amount sheet can scale it
-        quickSheet(item);
-      }catch(e){ closeSheet(); toast(e.message,true); }
-    };
-    inp.click(); break;}
 
   case 'describe':{
     sheet(`<h2 style="margin-top:0">What did you eat?</h2>
@@ -1492,6 +1454,9 @@ async function act(name,arg,el){
     S.bought[arg]=!S.bought[arg]; save(); shopSheet(); break;}
 
   case 'clearbought': S.bought={}; save(); shopSheet(); break;
+
+  case 'savepantry':
+    S.pantry=val('p-note'); save(); render(); toast('Saved'); break;
 
   case 'saveprofile':{
     const p=P();
