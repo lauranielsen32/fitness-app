@@ -1237,38 +1237,67 @@ function vTraining(){
   </div>`;
 }
 
+let planDay=null;
+const SLOTS=[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack','Snack']];
+
 function vPlan(){
-  const days=weekDays();
+  const days=weekDays(), t=today();
+  if(!planDay||!days.some(d=>d.key===planDay))planDay=days.some(d=>d.key===t)?t:days[0].key;
+  const day=days.find(d=>d.key===planDay);
+  const pl=S.plan[planDay]||{};
+  const sum=SLOTS.map(([k])=>mealById(pl[k])).filter(Boolean)
+    .reduce((a,m)=>({k:a.k+(+m.kcal||0),p:a.p+(+m.p||0)}),{k:0,p:0});
+  const p=P();
   return `
   <h1>Plan</h1>
-  <div class="grid2">
-    <button data-act="newmeal">New meal</button>
-    <button class="pri" data-act="shop">Shopping list</button>
+
+  <div class="card" style="padding:10px">
+    <div class="row" style="gap:5px">
+      ${days.map(d=>`<button data-act="planday" data-arg="${d.key}"
+        style="flex:1;padding:9px 0;font-size:12px;border-radius:9px;line-height:1.25;
+        background:${d.key===planDay?'var(--sage-dim)':'#0a0c0b'};
+        color:${d.key===planDay?'#fff':'var(--dim)'};
+        border-color:${d.key===planDay?'var(--sage-dim)':'var(--line)'}">
+        ${d.label.slice(0,3)}${d.key===t?'<br><span style="font-size:9px;opacity:.8">today</span>':''}</button>`).join('')}
+    </div>
   </div>
-  <h2>This week</h2>
-  ${days.map(d=>{
-    const pl=S.plan[d.key]||{};
-    const sum=['breakfast','lunch','dinner','snack']
-      .map(s=>mealById(pl[s])).filter(Boolean)
-      .reduce((a,m)=>({k:a.k+(+m.kcal||0),p:a.p+(+m.p||0)}),{k:0,p:0});
-    return `<div class="card">
-      <div class="between"><b>${d.label}</b><span class="st">${sum.k?sum.k+' kcal · '+sum.p+'P':''}</span></div>
-      ${['breakfast','lunch','dinner','snack'].map(slot=>{
-        const m=mealById(pl[slot]);
-        return `<div class="between" style="padding:7px 0;border-top:1px solid var(--line)">
-          <span class="${m?'':'dim'}" style="font-size:14px">${m?esc(m.name):slot}</span>
-          <button class="ghost sm" data-act="pick" data-arg="${d.key}|${slot}">${m?'Change':'Add'}</button>
-        </div>`;}).join('')}
-    </div>`;}).join('')}
-  <h2>Meals</h2>
+
   <div class="card">
-    ${S.meals.length?S.meals.map(m=>`
-      <div class="item"><div style="flex:1"><div>${esc(m.name)}</div>
-      <div class="st">${m.kcal} kcal · ${m.p}P · ${m.ing.length} ingredients</div></div>
-      <button class="ghost sm" data-act="editmeal" data-arg="${m.id}">Edit</button></div>`).join('')
-      :'<div class="note">No meals yet. Create one, then put it on a day.</div>'}
-  </div>`;
+    <div class="between">
+      <div><div class="lbl">${day.label}${planDay===t?' · today':''}</div>
+        <div class="mid">${sum.k}<span class="dim" style="font-size:13px">/${p.kcal} kcal</span></div></div>
+      <div style="text-align:right"><div class="lbl">Protein</div>
+        <div class="mid ${sum.p>=p.protein?'sage':''}">${sum.p}<span class="dim" style="font-size:13px">/${p.protein}</span></div></div>
+    </div>
+    ${ring(sum.k,p.kcal)}
+    ${sum.k?`<div class="st" style="margin-top:8px">${sum.k>p.kcal
+      ? (sum.k-p.kcal)+' over the day' : (p.kcal-sum.k)+' left to fill'}</div>`:''}
+  </div>
+
+  <div class="card">
+    ${SLOTS.map(([k,label])=>{
+      const m=mealById(pl[k]);
+      return `<div class="between" style="padding:11px 0;border-bottom:1px solid var(--line)">
+        <div style="min-width:0">
+          <div class="lbl">${label}</div>
+          <div class="${m?'':'dim'}" style="font-size:15px;margin-top:1px;white-space:nowrap;
+            overflow:hidden;text-overflow:ellipsis">${m?esc(m.name):'—'}</div>
+        </div>
+        <div class="row" style="gap:8px;flex:none">
+          ${m?`<span class="st">${m.kcal} kcal</span>`:''}
+          <button class="sm" data-act="pick" data-arg="${planDay}|${k}">${m?'Change':'Add'}</button>
+        </div>
+      </div>`;}).join('')}
+    <div class="between" style="padding-top:11px">
+      <span class="st">Same food every day is fine. Copy it over.</span>
+      <button class="sm" data-act="copyday" data-arg="${planDay}">Copy to week</button>
+    </div>
+  </div>
+
+  <button class="wide pri" data-act="shop">Shopping list for the week</button>
+  <div style="height:16px"></div>`;
 }
+
 function weekDays(){
   const out=[],now=new Date(),dow=(now.getDay()+6)%7;
   const mon=new Date(now); mon.setDate(now.getDate()-dow);
@@ -1595,18 +1624,48 @@ async function act(name,arg,el){
       if(S.plan[d][s]===+arg)delete S.plan[d][s];}));
     closeSheet(); save(); render(); break;}
 
+  case 'planday': planDay=arg; render(); break;
+
+  case 'copyday':{
+    const src=S.plan[arg]; if(!src||!Object.keys(src).length)
+      return toast('Nothing to copy — fill this day first.',true);
+    weekDays().forEach(d=>{S.plan[d.key]=Object.assign({},src);});
+    save(); render(); toast('Copied to every day this week.'); break;}
+
   case 'pick':{
     const [day,slot]=arg.split('|');
-    sheet(`<h2 style="margin-top:0">${slot} · ${day}</h2>
+    const label=SLOTS.find(x=>x[0]===slot)[1];
+    const dayName=weekDays().find(d=>d.key===day).label;
+    sheet(`
+      <div class="between" style="margin-bottom:12px">
+        <h2 style="margin:0">${label} · ${dayName}</h2>
+        <button class="sm" data-act="closes">Close</button></div>
       ${S.meals.length?S.meals.map(m=>
-        `<button class="wide" style="margin-bottom:7px;text-align:left"
-          data-act="setmeal" data-arg="${day}|${slot}|${m.id}">${esc(m.name)}
-          <span class="dim"> · ${m.kcal} kcal</span></button>`).join('')
-        :'<div class="note">No meals yet.</div>'}
-      <div class="grid2" style="margin-top:8px">
-        <button data-act="setmeal" data-arg="${day}|${slot}|0">Clear</button>
-        <button data-act="closes">Close</button></div>`);
+        `<button class="wide" style="margin-bottom:7px;text-align:left;padding:11px 13px"
+          data-act="setmeal" data-arg="${day}|${slot}|${m.id}">
+          <div class="between"><span>${esc(m.name)}</span>
+            <span class="dim" style="font-size:13px;white-space:nowrap">${m.kcal} kcal</span></div>
+          <div class="st">${m.p}g protein · ${m.ing.length} ingredients</div>
+        </button>`).join('')
+        :'<div class="note" style="margin-bottom:10px">No meals yet. Build one and it stays in this list.</div>'}
+      <div class="grid2" style="margin-top:10px">
+        <button data-act="setmeal" data-arg="${day}|${slot}|0">Clear this slot</button>
+        <button class="pri" data-act="newmeal">New meal</button>
+      </div>
+      ${S.meals.length?`<button class="wide ghost sm" data-act="editmeals" style="margin-top:8px">Edit meals</button>`:''}`);
     break;}
+
+  case 'editmeals':
+    sheet(`<div class="between" style="margin-bottom:12px">
+        <h2 style="margin:0">Meals</h2>
+        <button class="sm" data-act="closes">Close</button></div>
+      ${S.meals.map(m=>`<div class="item">
+        <div style="flex:1;min-width:0"><div>${esc(m.name)}</div>
+          <div class="st">${m.kcal} kcal · ${m.p}g protein · ${m.ing.length} ingredients</div></div>
+        <button class="ghost sm" data-act="editmeal" data-arg="${m.id}">Edit</button>
+      </div>`).join('')}
+      <button class="wide pri" style="margin-top:12px" data-act="newmeal">New meal</button>`);
+    break;
 
   case 'setmeal':{
     const [day,slot,id]=arg.split('|');
