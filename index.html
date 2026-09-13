@@ -244,7 +244,11 @@ async function pullSteps(){
     });
     if(!best)return false;
     S.habits[t]=S.habits[t]||{};
-    if((S.habits[t].steps||0)>=best)return false;
+    /* The phone is the source of truth — a number typed by hand is not
+       overruled, but a stale local figure is. Highest of today's files
+       wins among themselves, since the count only climbs. */
+    if(S.habits[t].stepsManual)return false;
+    if(S.habits[t].steps===best)return false;
     S.habits[t].steps=best;
     localStorage.setItem(DATA_KEY,JSON.stringify(S));
     return true;
@@ -1408,13 +1412,14 @@ async function act(name,arg,el){
       <input id="st-n" type="number" inputmode="numeric" placeholder="${STEP_GOAL}">
       <div class="grid2"><button data-act="closes">Cancel</button>
       <button class="pri" data-act="savesteps">Save</button></div>
-      <div class="note" style="margin-top:10px">From your phone's health app. ${STEP_GOAL} is the target —
-      below 6000 for a week and the deficit gets harder than it needs to be.</div>`);
+      <div class="note" style="margin-top:10px">Your phone fills this in on its own. Type a number here and
+      it stays, untouched by the automatic updates for the rest of the day.</div>`);
     setTimeout(()=>document.getElementById('st-n').focus(),60); break;}
 
   case 'savesteps':{
     const d=today(); S.habits[d]=S.habits[d]||{};
     S.habits[d].steps=num('st-n');
+    S.habits[d].stepsManual=1;          // typed by hand, so the phone does not overwrite it
     closeSheet(); save(); render(); break;}
 
   case 'habit':{
