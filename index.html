@@ -126,7 +126,7 @@ const DEVICE=(function(){const u=navigator.userAgent;
 function emptyS(){return{
   meta:{at:0,dev:'',v:2},
   profile:{height:170,age:28,sex:'f',start:87,goal:75,kcal:1800,protein:135,activity:1.375,began:''},
-  pantry:'',                  // the products she actually buys, fed to the AI every time
+  pantry:[],                  // one line per product she buys, fed to the AI every time
   weights:[],                 // [{d:'2026-09-14',kg:86}]
   food:{},                    // {'2026-09-12':[{id,name,kcal,p,c,f,photo,t}]}
   meals:[],                   // [{id,name,kcal,p,ing:[{n,q,u,s}]}]
@@ -300,7 +300,9 @@ document.addEventListener('visibilitychange',function(){
 });
 function merge(d){const base=emptyS();
   const out=Object.assign(base,d||{});
-  out.pantry=(d&&d.pantry)||'';
+  out.pantry=(d&&d.pantry)||[];
+  if(!Array.isArray(out.pantry))                       // migrate the old text blob
+    out.pantry=String(out.pantry).split('\n').map(x=>x.trim()).filter(Boolean);
   out.profile=Object.assign(base.profile,d&&d.profile||{});
   out.training=Object.assign(base.training,d&&d.training||{});
   return out;}
@@ -397,10 +399,15 @@ async function aiFood(b64){
 /* Same model, no photo: she writes what she ate and it fills the numbers. */
 /* Her own products beat the AI's idea of an average supermarket.
    Written once in Settings, sent with every photo and description. */
+function pantryList(){
+  const v=S.pantry;
+  if(Array.isArray(v))return v.filter(x=>String(x).trim());
+  return String(v||'').split('\n').map(x=>x.trim()).filter(Boolean);   // old single-blob data
+}
 function pantryNote(){
-  const t=(S.pantry||'').trim();
-  return t?' The person eats these specific products — use them, not standard versions: '+
-    t.replace(/[.\s]+$/,'')+'.':'';
+  const l=pantryList();
+  return l.length?' The person eats these specific products — use them, not standard versions: '+
+    l.map(x=>x.replace(/[.\s]+$/,'')).join('. ')+'.':'';
 }
 async function aiText(desc){
   if(!aiKey())throw new Error('No AI key — add one in Settings.');
@@ -833,6 +840,7 @@ function render(){
                 settings:vSettings})[tab]();
   status();
   if(tab==='food'){paintThumbs();wireSearch();}
+  if(tab==='settings')wirePantry();
 }
 document.addEventListener('click',function(e){
   const b=e.target.closest('[data-tab]');    if(b)return go(b.dataset.tab);
@@ -963,6 +971,19 @@ function vFood(){
   </div>
   ${!aiKey()?'<div class="note" style="margin-top:10px">Add a free Gemini key in Settings to use photo logging.</div>':''}`;
 }
+function wirePantry(){
+  document.querySelectorAll('.pitem').forEach(inp=>{
+    inp.onchange=function(){
+      const l=pantryList(); l[+inp.dataset.i]=inp.value.trim();
+      S.pantry=l.filter(Boolean); save();
+      inp.style.borderColor='var(--sage-dim)';
+      setTimeout(()=>{inp.style.borderColor='';},900);
+    };
+  });
+  const n=document.getElementById('p-new');
+  if(n)n.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();act('addpantry');}};
+}
+
 let hits=[];
 function wireSearch(){
   const q=document.getElementById('q'), box=document.getElementById('hits');
@@ -1213,10 +1234,17 @@ function vSettings(){
 
   <h2>What you actually buy</h2>
   <div class="card">
-    <textarea id="p-note" rows="4" placeholder="Granola is sugar-free. Yoghurt is 0.1% skyr. Zero-sugar ketchup and light dressing. Sweetener, never sugar, in coffee.">${esc(S.pantry||'')}</textarea>
-    <button class="pri wide" data-act="savepantry">Save</button>
-    <div class="note" style="margin-top:10px">Written once. Sent with every photo and description, so the
-      AI stops pricing the standard supermarket version of what you eat.</div>
+    ${pantryList().length?pantryList().map((t,i)=>`
+      <div class="row" style="gap:8px;margin-bottom:7px">
+        <input class="pitem" data-i="${i}" value="${esc(t)}" style="margin:0">
+        <button class="sm" data-act="delpantry" data-arg="${i}" style="flex:none">✕</button>
+      </div>`).join(''):'<div class="note" style="margin-bottom:10px">Nothing yet.</div>'}
+    <div class="row" style="gap:8px;margin-top:10px">
+      <input id="p-new" placeholder="Granola is sugar-free" style="margin:0">
+      <button class="sm pri" data-act="addpantry" style="flex:none">Add</button>
+    </div>
+    <div class="note" style="margin-top:10px">One line per product. Sent with every photo, so the AI stops
+      pricing the standard supermarket version of what you eat. Edit a line and it saves itself.</div>
   </div>
 
   <h2>Backup</h2>
@@ -1459,8 +1487,16 @@ async function act(name,arg,el){
 
   case 'clearbought': S.bought={}; save(); shopSheet(); break;
 
-  case 'savepantry':
-    S.pantry=val('p-note'); save(); flash(el,'Saved ✓'); break;
+  case 'addpantry':{
+    const t=val('p-new').trim(); if(!t)return;
+    S.pantry=pantryList().concat(t);
+    save(); render();
+    setTimeout(()=>{const n=document.getElementById('p-new');if(n)n.focus();},50);
+    break;}
+
+  case 'delpantry':{
+    const l=pantryList(); l.splice(+arg,1); S.pantry=l;
+    save(); render(); break;}
 
   case 'saveprofile':{
     const p=P();
