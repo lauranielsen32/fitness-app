@@ -277,8 +277,16 @@ async function saveNow(){
   }catch(e){lastErr=e.message;toast('Could not save: '+e.message,true);}
   finally{busy=false;status();}
 }
+/* Opening the camera backgrounds the app. Coming back fires the
+   visibility pull, which would replace S underneath work in flight and
+   the half-finished line would simply vanish. Hold the pull until the
+   work is done and saved. */
+let working=0;
+function workStart(){working++;}
+function workEnd(){working=Math.max(0,working-1);}
+
 async function pullIfNewer(quiet){
-  if(!linked()||dirty||busy)return;
+  if(!linked()||dirty||busy||working)return;
   busy=true;status();
   try{
     const rem=await pull();
@@ -430,6 +438,7 @@ function checkPantry(i){
 async function runCheck(i,retry){
   if(!aiKey())return;
   const l=pantryList(); if(!l[i])return;
+  workStart();
   try{
     const models=await aiModels();
     const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[0]+':generateContent',
@@ -456,7 +465,7 @@ async function runCheck(i,retry){
     pantryRefresh();
   }catch(e){
     if(!retry){await new Promise(z=>setTimeout(z,2500)); return runCheck(i,1);}
-  }
+  }finally{ workEnd(); }
 }
 async function aiText(desc){
   if(!aiKey())throw new Error('No AI key — add one in Settings.');
@@ -1444,6 +1453,7 @@ async function act(name,arg,el){
     inp.type='file'; inp.accept='image/*'; inp.capture='environment';
     inp.onchange=async function(){
       const f=inp.files[0]; if(!f)return;
+      workStart();
       sheet('<div class="note">Reading photo…</div>');
       try{
         const big=await shrink(f,900,.72), small=await shrink(f,400,.6);
@@ -1453,6 +1463,7 @@ async function act(name,arg,el){
         catch(e){err=e.message;toast(e.message,true);}
         foodSheet(Object.assign(g,{photoData:small,err:err}));
       }catch(e){closeSheet();toast('Photo failed: '+e.message,true);}
+      finally{ workEnd(); }
     };
     inp.click(); break;}
 
@@ -1471,12 +1482,13 @@ async function act(name,arg,el){
     const desc=val('d-txt').trim();
     if(!desc){toast('Write what you ate.',true);return;}
     sheet('<div class="note">Working it out…</div>');
+    workStart();
     try{
       const g=await aiText(desc);
       foodSheet(g);
     }catch(e){
       foodSheet({name:desc,kcal:'',p:'',c:'',f:'',err:e.message});
-    }
+    }finally{ workEnd(); }
     break;}
 
   case 'quick':{
@@ -1647,6 +1659,7 @@ async function act(name,arg,el){
     inp.type='file'; inp.accept='image/*'; inp.capture='environment';
     inp.onchange=async function(){
       const f=inp.files[0]; if(!f)return;
+      workStart();
       const l0=pantryList();
       if(isNew)l0.push({t:(cur.t||'New product')+' — reading the label…',conf:'',reading:1});
       else if(l0[i])l0[i]=Object.assign({},l0[i],{reading:1,t:l0[i].t+' — reading the label…'});
@@ -1671,7 +1684,7 @@ async function act(name,arg,el){
           .concat(isNew?[]:[]);                      // drop the placeholder again
         if(!isNew){const back=pantryList(); if(back[i])back[i].t=cur.t; S.pantry=back;}
         save(); pantryRefresh(); toast(e.message,true);
-      }
+      }finally{ workEnd(); }
     };
     inp.click(); break;}
 
