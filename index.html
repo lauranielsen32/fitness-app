@@ -433,9 +433,10 @@ function weekStats(){
   const logged=past.filter(d=>dayKcal(d)>0);
   const over=logged.filter(d=>dayKcal(d)>P().kcal).length;
   const stepDays=past.filter(d=>daySteps(d)>=STEP_GOAL).length;
+  const stepDaysCounted=past.filter(d=>d!==t||daySteps(d)>0).length;
   const weighed=S.weights.some(w=>wk.includes(w.d));
   return{wk:wk,past:past,sessions:sessions,over:over,logged:logged.length,
-         stepDays:stepDays,weighed:weighed,daysIn:past.length};
+         stepDays:stepDays,stepDaysCounted:stepDaysCounted,weighed:weighed,daysIn:past.length};
 }
 function stepStreakUnder(){
   let n=0;
@@ -449,9 +450,11 @@ function stepStreakUnder(){
 }
 /* What this week's slacking costs, in days added to the finish line. */
 function daysLost(){
-  const w=weekStats();
+  const w=weekStats(), t=today();
   const missed=Math.max(0,(w.daysIn>=7?4:0)-w.sessions);
-  const stepShort=w.past.reduce((a,d)=>a+Math.max(0,STEP_GOAL-daySteps(d))*0.04,0);
+  /* today is still running — its step count is not final until tonight */
+  const stepShort=w.past.filter(d=>d!==t)
+    .reduce((a,d)=>a+Math.max(0,STEP_GOAL-daySteps(d))*0.04,0);
   const overKcal=w.past.reduce((a,d)=>a+Math.max(0,dayKcal(d)-P().kcal),0);
   const deficit=Math.max(150,tdee(latestWeight())-P().kcal);
   return Math.round((missed*350+stepShort+overKcal)/deficit);
@@ -715,6 +718,7 @@ function vHome(){
     </div>
     ${ring(h.steps||0,STEP_GOAL)}
     <div class="note" style="margin-top:8px">${(h.steps||0)>=STEP_GOAL?'Done. That was the minimum, not the win.'
+      :(h.steps||0)===0?'Your phone reports in at 12, 17 and 23.45. A zero this early means nothing yet — walk.'
       :'Steps move more of the deficit than any cardio session. They drop without you noticing when you eat less. Get out and walk.'}</div>
   </div>
   <div class="card">
@@ -730,7 +734,7 @@ function vHome(){
   <div class="card">
     <table>
       <tr><td>Sessions</td><td class="${w.sessions>=4?'sage':'bad'}">${w.sessions} / 4</td></tr>
-      <tr><td>Days at ${STEP_GOAL} steps</td><td class="${w.stepDays>=w.daysIn-1?'sage':'bad'}">${w.stepDays} / ${w.daysIn}</td></tr>
+      <tr><td>Days at ${STEP_GOAL} steps</td><td class="${w.stepDays>=w.stepDaysCounted-1?'sage':'bad'}">${w.stepDays} / ${w.stepDaysCounted}</td></tr>
       <tr><td>Days over calories</td><td class="${w.over?'bad':'sage'}">${w.over}</td></tr>
       <tr><td>Weigh-in</td><td class="${w.weighed?'sage':'bad'}">${w.weighed?'done':'missing'}</td></tr>
     </table>
