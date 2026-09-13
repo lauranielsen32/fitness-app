@@ -391,6 +391,40 @@ async function aiFood(b64){
   }
   throw new Error('All models failed — '+last);
 }
+/* Same model, no photo: she writes what she ate and it fills the numbers. */
+async function aiText(desc){
+  if(!aiKey())throw new Error('No AI key — add one in Settings.');
+  const models=await aiModels();
+  const body=JSON.stringify({
+    contents:[{parts:[{text:
+      'A person logging food wrote: "'+desc+'". Work out the nutrition for exactly that. '+
+      'Reply with JSON only: {"name":string,"grams":number,"kcal":number,"protein":number,'+
+      '"carbs":number,"fat":number}. name is a short tidy version of what they wrote. '+
+      'grams is the total served weight. Grams for protein/carbs/fat. '+
+      'Assume normal supermarket products and count oil, butter and sauce. '+
+      'Be realistic, not optimistic.'}]}],
+    generationConfig:{responseMimeType:'application/json',temperature:0.2}});
+  let last='';
+  for(let i=0;i<models.length;i++){
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[i]+':generateContent',
+      {method:'POST',headers:{'content-type':'application/json','x-goog-api-key':aiKey()},body:body});
+    if(r.ok){
+      const j=await r.json();
+      const txt=j.candidates?.[0]?.content?.parts?.[0]?.text||'';
+      let o; try{o=JSON.parse(txt);}catch(e){last='model returned no usable JSON';continue;}
+      if(i>0){modelList=[models[i]].concat(models.filter((m,k)=>k!==i));
+        localStorage.setItem(AIMODEL_KEY,JSON.stringify(modelList));}
+      return{name:String(o.name||desc),port:o.grams?Math.round(+o.grams)+' g':'',
+        kcal:Math.round(+o.kcal||0),p:Math.round(+o.protein||0),
+        c:Math.round(+o.carbs||0),f:Math.round(+o.fat||0)};
+    }
+    let msg=''; try{msg=(await r.json()).error?.message||'';}catch(e){}
+    last=r.status+(msg?': '+msg.slice(0,90):'');
+    if(r.status===400||r.status===401||r.status===403)throw new Error('AI error '+last);
+  }
+  throw new Error('All models failed — '+last);
+}
+
 /* photo -> downscaled jpeg base64 */
 function shrink(file,max,q){
   return new Promise(function(res,rej){
@@ -900,9 +934,10 @@ function vFood(){
     <div id="hits"></div>
   </div>
   <div class="grid2">
-    <button class="pri" data-act="photo">Photo + AI</button>
-    <button data-act="manual">Add by hand</button>
+    <button class="pri" data-act="photo">Photo</button>
+    <button class="pri" data-act="describe">Describe it</button>
   </div>
+  <button class="wide ghost sm" data-act="manual" style="margin-top:8px">Type the numbers myself</button>
   <h2>Today</h2>
   <div class="card">
     ${list.length?list.map(x=>`
@@ -1231,6 +1266,27 @@ async function act(name,arg,el){
 
   case 'manual': foodSheet({name:'',kcal:'',p:'',c:'',f:''}); break;
 
+  case 'describe':{
+    sheet(`<h2 style="margin-top:0">What did you eat?</h2>
+      <textarea id="d-txt" rows="3" placeholder="two slices of rye bread with cheese and a boiled egg"></textarea>
+      <div class="grid2"><button data-act="closes">Cancel</button>
+      <button class="pri" data-act="askai">Work it out</button></div>
+      <div class="note" style="margin-top:10px">Write it the way you would say it. Amounts help —
+        "a big bowl", "150 g", "two of them". The numbers come back for you to correct.</div>`);
+    setTimeout(()=>document.getElementById('d-txt').focus(),60); break;}
+
+  case 'askai':{
+    const desc=val('d-txt').trim();
+    if(!desc){toast('Write what you ate.',true);return;}
+    sheet('<div class="note">Working it out…</div>');
+    try{
+      const g=await aiText(desc);
+      foodSheet(g);
+    }catch(e){
+      foodSheet({name:desc,kcal:'',p:'',c:'',f:'',err:e.message});
+    }
+    break;}
+
   case 'quick':{
     const x=hits[+arg]; if(!x)return;
     quickSheet(x); break;}
@@ -1478,9 +1534,9 @@ function foodSheet(x){
   <label class="lbl">Amount</label><input id="f-port" value="${esc(x.port||'')}" placeholder="e.g. 150 g">
   <div class="grid2">
     <div><label class="lbl">Kcal</label><input id="f-kcal" type="number" inputmode="numeric" value="${x.kcal}"></div>
-    <div><label class="lbl">Protein g</label><input id="f-p" type="number" inputmode="numeric" value="${x.p}"></div>
-    <div><label class="lbl">Carbs g</label><input id="f-c" type="number" inputmode="numeric" value="${x.c}"></div>
-    <div><label class="lbl">Fat g</label><input id="f-f" type="number" inputmode="numeric" value="${x.f}"></div>
+    <div><label class="lbl">Protein g <span class="dim">optional</span></label><input id="f-p" type="number" inputmode="numeric" value="${x.p}"></div>
+    <div><label class="lbl">Carbs g <span class="dim">optional</span></label><input id="f-c" type="number" inputmode="numeric" value="${x.c}"></div>
+    <div><label class="lbl">Fat g <span class="dim">optional</span></label><input id="f-f" type="number" inputmode="numeric" value="${x.f}"></div>
   </div>
   <div class="note" style="margin:4px 0 12px">The AI guesses low on oil and sauce. Correct it upward, not downward.</div>
   <div class="grid2">
