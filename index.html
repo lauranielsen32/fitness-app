@@ -65,7 +65,8 @@ nav svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;
 .gear{background:none;border:0;padding:10px;margin:-10px -8px -10px 0;color:var(--dim);
   border-radius:8px;line-height:0;min-width:42px;min-height:42px;display:flex;
   align-items:center;justify-content:center}
-.gear svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round}
+.gear svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
 .item{display:flex;gap:11px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .item:last-child{border-bottom:0}
 .thumb{width:42px;height:42px;border-radius:9px;object-fit:cover;background:#0a0c0b;flex:none}
@@ -93,7 +94,7 @@ td:last-child{text-align:right;color:var(--dim)}
     <div class="row" style="gap:10px">
       <span class="st" id="stSaved"></span>
       <button class="gear" data-tab="settings" aria-label="Settings">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"/></svg>
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
   </div>
@@ -425,10 +426,20 @@ function weeksLeft(){
    No praise for doing what was agreed. Missing work is priced in days
    added to the finish line, because that is what it actually costs. */
 function dayKcal(d){return (S.food[d]||[]).reduce((a,x)=>a+(+x.kcal||0),0);}
+/* Nothing counts before the first day she actually used the app. No
+   judging days she was not here for. */
+function startedOn(){
+  const all=[].concat(
+    S.weights.map(w=>w.d),
+    Object.keys(S.food).filter(d=>(S.food[d]||[]).length),
+    Object.keys(S.habits),
+    S.training.log.map(x=>x.d));
+  return all.length?all.sort()[0]:null;
+}
 function daySteps(d){return (S.habits[d]||{}).steps||0;}
 function weekStats(){
-  const wk=weekDays().map(x=>x.key), t=today();
-  const past=wk.filter(d=>d<=t);
+  const wk=weekDays().map(x=>x.key), t=today(), from=startedOn();
+  const past=from?wk.filter(d=>d<=t&&d>=from):[];
   const sessions=S.training.log.filter(x=>wk.includes(x.d)).length;
   const logged=past.filter(d=>dayKcal(d)>0);
   const over=logged.filter(d=>dayKcal(d)>P().kcal).length;
@@ -451,6 +462,7 @@ function stepStreakUnder(){
 /* What this week's slacking costs, in days added to the finish line. */
 function daysLost(){
   const w=weekStats(), t=today();
+  if(!startedOn())return 0;
   const missed=Math.max(0,(w.daysIn>=7?4:0)-w.sessions);
   /* today is still running — its step count is not final until tonight */
   const stepShort=w.past.filter(d=>d!==t)
@@ -462,6 +474,7 @@ function daysLost(){
 /* The harshest line the data supports. Never about her — always about
    the numbers and what they cost. */
 function verdict(){
+  if(!startedOn())return{t:'Nothing logged yet. Weigh in, log what you eat, and do Monday\'s session. Start.',bad:0};
   const w=weekStats(), t=today(), d=new Date().getDay(), hour=new Date().getHours();
   const todayKcal=dayKcal(t), lost=daysLost();
   if(todayKcal>P().kcal)
